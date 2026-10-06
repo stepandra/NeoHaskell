@@ -431,17 +431,20 @@ normalUploadFlow config blobStore stateStore ownerHash filename contentType cont
 -- entry by the same owner-scoped content hash, so healing never crosses owners
 -- or writes different content. 'BlobStore.store' overwrites idempotently, so a
 -- redundant re-store (e.g. after a transient existence-check error) is harmless.
+-- | Re-store the deduplicated blob only when the store confirms it is absent.
+-- An errored existence check leaves presence unknown: rewriting then would
+-- overwrite a blob we cannot see (and, on S3, pay for the transfer), so the
+-- request fails instead. The real error stays in the server log; the client
+-- sees a generic message (S8).
 ensureBlobPresent :: BlobStore -> BlobKey -> Bytes -> Task Text Unit
 ensureBlobPresent blobStore blobKey content = do
   existsResult <- blobStore.exists blobKey |> Task.asResult
   blobPresent <- case existsResult of
     Ok present -> Task.yield present
     Err existsErr -> do
-      -- Presence unknown: keep the real error in the server log, then treat as
-      -- missing and heal (re-store is idempotent).
-      Log.warn [fmt|Dedup blob existence check errored (#{show existsErr}); treating as missing|]
+      Log.critical [fmt|Dedup blob existence check errored (#{show existsErr}); refusing to rewrite|]
         |> Task.ignoreError
-      Task.yield False
+      Task.throw "Failed to verify stored file content. Please retry."
   Task.unless blobPresent do
       Log.warn "Deduplicated blob unavailable; self-healing by re-storing content"
         |> Task.ignoreError

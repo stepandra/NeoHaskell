@@ -150,7 +150,7 @@
       "kind": "hspec",
       "suite": "nhcore-test-service",
       "path": "core/test/Service/FileUpload/ContentDedupSpec.hs",
-      "match": "dedup self-heals when the existence check errors",
+      "match": "dedup fails closed when the existence check errors",
       "boundary": "filesystem:real",
       "expected_examples": 1,
       "fixture": "Service.FileUpload.ContentDedup"

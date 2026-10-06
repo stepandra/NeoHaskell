@@ -1,6 +1,7 @@
 module Service.FileUpload.ContentDedupSpec where
 
 import Bytes qualified
+import ConcurrentVar qualified
 import Core
 import Data.Char (isDigit)
 import Directory qualified
@@ -387,21 +388,32 @@ spec = do
               |> Task.mapError (\e -> [fmt|retrieve failed: #{show e}|])
             computeContentHash restored |> shouldBe (computeContentHash content)
 
-        it "dedup self-heals when the existence check errors" \_ -> do
+        it "dedup fails closed when the existence check errors" \_ -> do
           withTestDedupEnv \env -> do
-            let content = "self-heal on exists-error content" |> Text.toBytes
+            let content = "fail-closed on exists-error content" |> Text.toBytes
             response1 <- uploadFile env "owner1" "file.txt" "text/plain" content
-            env.blobStore.delete response1.blobKey
-              |> Task.mapError (\e -> [fmt|delete failed: #{show e}|])
-            -- Make the existence check itself fail; heal must still occur
+            -- Presence is unknown, not known-missing: the blob is still there,
+            -- only the check fails. The upload must not rewrite it blindly.
+            storeCalls <- ConcurrentVar.containing (0 :: Int)
             let faultingBlobStore =
                   (env.blobStore)
-                    { exists = \_ -> Task.throw (StorageError "injected exists failure") }
-            response2 <-
+                    { exists = \_ -> Task.throw (StorageError "injected exists failure")
+                    , store = \_ _ -> ConcurrentVar.modify (\n -> n + 1) storeCalls
+                    }
+            result <-
               handleUploadImpl env.config faultingBlobStore env.stateStore "owner1" "file.txt" "text/plain" content
-            blobPresent <- env.blobStore.exists response2.blobKey
-              |> Task.mapError (\e -> [fmt|exists failed: #{show e}|])
-            blobPresent |> shouldBe True
+                |> Task.asResult
+            case result of
+              Ok _ -> fail "expected the upload to fail when blob presence is unknown"
+              Err msg -> do
+                (Text.contains "verify" msg) |> shouldBe True
+                (Text.contains "injected" msg) |> shouldBe False
+            rewrites <- ConcurrentVar.peek storeCalls
+            rewrites |> shouldBe 0
+            -- The original blob is untouched and still served.
+            restored <- env.blobStore.retrieve response1.blobKey
+              |> Task.mapError (\e -> [fmt|retrieve failed: #{show e}|])
+            restored |> shouldBe content
 
         it "dedup surfaces a generic error (no dangling ref) when re-store fails" \_ -> do
           withTestDedupEnv \env -> do
