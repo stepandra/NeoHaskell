@@ -10,12 +10,12 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 
 ## Task
 
-- `yield :: value -> Task w value`  <!-- 596 call sites -->
-- `ignoreError :: Task err Unit -> Task w Unit`  <!-- 240 call sites -->
-- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 224 call sites -->
-- `throw :: err -> Task err w`  <!-- 211 call sites -->
-- `fromIO :: IO value -> Task w value`  <!-- 130 call sites -->
-- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 88 call sites -->
+- `yield :: value -> Task w value`  <!-- 602 call sites -->
+- `ignoreError :: Task err Unit -> Task w Unit`  <!-- 242 call sites -->
+- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 229 call sites -->
+- `throw :: err -> Task err w`  <!-- 216 call sites -->
+- `fromIO :: IO value -> Task w value`  <!-- 131 call sites -->
+- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 89 call sites -->
 - `when :: Bool -> Task err Unit -> Task err Unit`  <!-- 31 call sites -->
 - `forEach :: (element -> Task err Unit) -> Array element -> Task err Unit`  <!-- 30 call sites -->
 - `fromFailableIO :: Exception exception => IO result -> Task exception result`  <!-- 24 call sites -->
@@ -25,7 +25,7 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 
 - `map :: (a -> b) -> Array a -> Array b`  <!-- 101 call sites -->
   - `>>> map sqrt (fromLinkedList [1,4,9] :: Array Float)` → `Array [1.0,2.0,3.0]`
-- `fromLinkedList :: LinkedList a -> Array a`  <!-- 92 call sites -->
+- `fromLinkedList :: LinkedList a -> Array a`  <!-- 93 call sites -->
 - `empty :: Array a`  <!-- 65 call sites -->
   - `>>> empty :: Array Int` → `Array []`
 - `toLinkedList :: Array a -> LinkedList a`  <!-- 59 call sites -->
@@ -49,8 +49,8 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 - `toLinkedList :: Text -> LinkedList Char`  <!-- 78 call sites -->
 - `toBytes :: Text -> Bytes`  <!-- 66 call sites -->
 - `replace :: Text -> Text -> Text -> Text`  <!-- 33 call sites -->
+- `trim :: Text -> Text`  <!-- 28 call sites -->
 - `fromBytes :: Bytes -> Text`  <!-- 27 call sites -->
-- `trim :: Text -> Text`  <!-- 27 call sites -->
 - `joinWith :: Text -> Array Text -> Text`  <!-- 26 call sites -->
 - `isEmpty :: Text -> Bool`  <!-- 25 call sites -->
 - `append :: Text -> Text -> Text`  <!-- 22 call sites -->
@@ -130,16 +130,16 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 
 ## Maybe
 
-- `withDefault :: a -> Maybe a -> a`  <!-- 56 call sites -->
+- `withDefault :: a -> Maybe a -> a`  <!-- 57 call sites -->
 - `map :: (a -> b) -> Maybe a -> Maybe b`  <!-- 14 call sites -->
 - `getOrDie :: HasCallStack => Maybe a -> a`  <!-- 9 call sites -->
 - `andThen :: (a -> Maybe b) -> Maybe a -> Maybe b`  <!-- 4 call sites -->
 
 ## Integration
 
-- `action :: (ActionContext -> Task IntegrationError (Maybe CommandPayload)) -> Action`  <!-- 26 call sites -->
+- `action :: (ActionContext -> Task IntegrationError (Maybe CommandPayload)) -> Action`  <!-- 27 call sites -->
 - `outbound :: ToAction config => config -> Action`  <!-- 17 call sites -->
-- `emitCommand :: forall command (name :: Symbol). (ToJSON command, name ~ NameOf command, KnownSymbol name) => command -> Task IntegrationError (Maybe CommandPayload)`  <!-- 10 call sites -->
+- `emitCommand :: forall command (name :: Symbol). (ToJSON command, name ~ NameOf command, KnownSymbol name) => command -> Task IntegrationError (Maybe CommandPayload)`  <!-- 12 call sites -->
 - `toAction :: ToAction config => config -> Action`  <!-- 6 call sites -->
 - `fromMap :: Map Text ValidatedOAuth2ProviderConfig -> ImmutableProviderRegistry`  <!-- 4 call sites -->
 - `runAction :: ActionContext -> Action -> Task IntegrationError (Maybe CommandPayload)`  <!-- 4 call sites -->
@@ -167,6 +167,17 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 - `load :: HasParser config => Task Text config`  <!-- 1 call sites -->
 - `secret :: FieldDef -> FieldDef`  <!-- 1 call sites -->
 
+## Uuid
+
+- `generate :: Task w Uuid`  <!-- 22 call sites -->
+- `toText :: Uuid -> Text`  <!-- 10 call sites -->
+- `nil :: Uuid`  <!-- 6 call sites -->
+- `toLegacy :: Uuid -> UUID`  <!-- 5 call sites -->
+- `fromText :: Text -> Maybe Uuid`  <!-- 3 call sites -->
+- `generateV5 :: Uuid -> Text -> Uuid`  <!-- 3 call sites -->
+  - `>>> Uuid.fromText "6ba7b810-9dad-11d1-80b4-00c04fd430c8" |> Maybe.getOrDie |> (\ns -> Uuid.generateV5 ns "python.org") |> Uuid.toText` → `"886313e1-3b8a-5372-9b90-0c9aee199e5d"`
+- `fromLegacy :: UUID -> Uuid`  <!-- 2 call sites -->
+
 ## LinkedList
 
 - `map :: (a -> b) -> LinkedList a -> LinkedList b`  <!-- 15 call sites -->
@@ -179,17 +190,6 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 - `head :: LinkedList a -> Maybe a`  <!-- 2 call sites -->
 - `all :: (a -> Bool) -> LinkedList a -> Bool`  <!-- 1 call sites -->
 - `concat :: LinkedList (LinkedList a) -> LinkedList a`  <!-- 1 call sites -->
-
-## Uuid
-
-- `generate :: Task w Uuid`  <!-- 21 call sites -->
-- `toText :: Uuid -> Text`  <!-- 9 call sites -->
-- `nil :: Uuid`  <!-- 6 call sites -->
-- `toLegacy :: Uuid -> UUID`  <!-- 5 call sites -->
-- `fromText :: Text -> Maybe Uuid`  <!-- 3 call sites -->
-- `generateV5 :: Uuid -> Text -> Uuid`  <!-- 3 call sites -->
-  - `>>> Uuid.fromText "6ba7b810-9dad-11d1-80b4-00c04fd430c8" |> Maybe.getOrDie |> (\ns -> Uuid.generateV5 ns "python.org") |> Uuid.toText` → `"886313e1-3b8a-5372-9b90-0c9aee199e5d"`
-- `fromLegacy :: UUID -> Uuid`  <!-- 2 call sites -->
 
 ## AsyncTask
 
@@ -204,11 +204,11 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 ## Path
 
 - `toLinkedList :: Path -> LinkedList Char`  <!-- 18 call sites -->
-- `fromText :: Text -> Maybe Path`  <!-- 9 call sites -->
-- `toText :: Path -> Text`  <!-- 7 call sites -->
-- `append :: Path -> Path -> Path`  <!-- 3 call sites -->
+- `fromText :: Text -> Maybe Path`  <!-- 10 call sites -->
+- `toText :: Path -> Text`  <!-- 9 call sites -->
+- `append :: Path -> Path -> Path`  <!-- 4 call sites -->
+- `fromLinkedList :: LinkedList Char -> Maybe Path`  <!-- 3 call sites -->
 - `joinPaths :: Array Path -> Path`  <!-- 3 call sites -->
-- `fromLinkedList :: LinkedList Char -> Maybe Path`  <!-- 2 call sites -->
 - `endsWith :: Text -> Path -> Bool`  <!-- 1 call sites -->
 
 ## ConcurrentMap
@@ -294,35 +294,35 @@ when WRITING TESTS; they are not feature-code frequency signal.
 
 ## Task
 
-- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 824 test call sites -->
-- `yield :: value -> Task w value`  <!-- 466 test call sites -->
-- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 283 test call sites -->
-- `mapArray :: (element -> Task err output) -> Array element -> Task err (Array output)`  <!-- 126 test call sites -->
-- `throw :: err -> Task err w`  <!-- 118 test call sites -->
+- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 826 test call sites -->
+- `yield :: value -> Task w value`  <!-- 476 test call sites -->
+- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 286 test call sites -->
+- `mapArray :: (element -> Task err output) -> Array element -> Task err (Array output)`  <!-- 127 test call sites -->
+- `throw :: err -> Task err w`  <!-- 122 test call sites -->
 - `andThen :: (input -> Task err output) -> Task err input -> Task err output`  <!-- 92 test call sites -->
 - `fromIO :: IO value -> Task w value`  <!-- 90 test call sites -->
 - `map :: (input -> output) -> Task err input -> Task err output`  <!-- 83 test call sites -->
 
 ## Array
 
-- `length :: Array a -> Int`  <!-- 265 test call sites -->
-- `empty :: Array a`  <!-- 221 test call sites -->
-- `fromLinkedList :: LinkedList a -> Array a`  <!-- 220 test call sites -->
-- `map :: (a -> b) -> Array a -> Array b`  <!-- 136 test call sites -->
-- `get :: Int -> Array a -> Maybe a`  <!-- 81 test call sites -->
-- `wrap :: a -> Array a`  <!-- 56 test call sites -->
+- `length :: Array a -> Int`  <!-- 269 test call sites -->
+- `empty :: Array a`  <!-- 225 test call sites -->
+- `fromLinkedList :: LinkedList a -> Array a`  <!-- 221 test call sites -->
+- `map :: (a -> b) -> Array a -> Array b`  <!-- 137 test call sites -->
+- `get :: Int -> Array a -> Maybe a`  <!-- 86 test call sites -->
+- `wrap :: a -> Array a`  <!-- 57 test call sites -->
 - `initialize :: Int -> (Int -> a) -> Array a`  <!-- 47 test call sites -->
 - `contains :: Eq value => value -> Array value -> Bool`  <!-- 41 test call sites -->
 
 ## Text
 
-- `contains :: Text -> Text -> Bool`  <!-- 436 test call sites -->
-- `toBytes :: Text -> Bytes`  <!-- 89 test call sites -->
+- `contains :: Text -> Text -> Bool`  <!-- 450 test call sites -->
+- `toBytes :: Text -> Bytes`  <!-- 91 test call sites -->
 - `fromLinkedList :: LinkedList Char -> Text`  <!-- 58 test call sites -->
 - `length :: Text -> Int`  <!-- 41 test call sites -->
 - `repeat :: Int -> Text -> Text`  <!-- 35 test call sites -->
 - `toLinkedList :: Text -> LinkedList Char`  <!-- 29 test call sites -->
-- `startsWith :: Text -> Text -> Bool`  <!-- 18 test call sites -->
+- `startsWith :: Text -> Text -> Bool`  <!-- 19 test call sites -->
 - `all :: (Char -> Bool) -> Text -> Bool`  <!-- 10 test call sites -->
 
 ## Parser
@@ -340,7 +340,7 @@ when WRITING TESTS; they are not feature-code frequency signal.
 
 - `toJSON :: ToJSON a => a -> Value`  <!-- 146 test call sites -->
 - `decodeText :: FromJSON value => Text -> Result Text value`  <!-- 137 test call sites -->
-- `encodeText :: ToJSON value => value -> Text`  <!-- 117 test call sites -->
+- `encodeText :: ToJSON value => value -> Text`  <!-- 120 test call sites -->
 - `object :: [(Text, Value)] -> Value`  <!-- 105 test call sites -->
 - `null :: Value`  <!-- 58 test call sites -->
 - `encode :: ToJSON value => value -> Value`  <!-- 55 test call sites -->
@@ -377,4 +377,4 @@ when WRITING TESTS; they are not feature-code frequency signal.
 - `generateV5 :: Uuid -> Text -> Uuid`  <!-- 19 test call sites -->
 - `fromText :: Text -> Maybe Uuid`  <!-- 3 test call sites -->
 
-*cut: 138 more modules (Map (257), Service.Application (250), Set (233), AsyncTask (223), Stream (212), …) — full surface: codemap/signatures/*
+*cut: 140 more modules (Map (258), Service.Application (250), Set (233), AsyncTask (223), Stream (212), …) — full surface: codemap/signatures/*
