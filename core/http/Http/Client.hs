@@ -123,10 +123,12 @@ instance Default Request where
       }
 
 
+-- | An empty request: no URL, no headers, default timeout and limits.
 request :: Request
 request = def
 
 
+-- | Set the request URL.
 withUrl :: Text -> Request -> Request
 withUrl url options =
   options
@@ -148,6 +150,7 @@ withTimeout seconds options =
       panic [fmt|withTimeout requires positive seconds, got: #{seconds}|]
 
 
+-- | Add one header; later additions win on duplicate names.
 addHeader :: Text -> Text -> Request -> Request
 addHeader key value options =
   let newHeaders = options.headers |> Map.set key value
@@ -178,6 +181,7 @@ withRedirects count options =
 -- | Set the maximum response body size in bytes.
 -- Default is 10MB. Use this to override for specific endpoints.
 {-# INLINE withMaxResponseSize #-}
+-- | Cap the response body in bytes; larger bodies fail with a size error.
 withMaxResponseSize :: GhcInt.Int -> Request -> Request
 withMaxResponseSize maxBytes options =
   case maxBytes > 0 of
@@ -307,6 +311,7 @@ requestHost :: Request -> Text
 requestHost options = options.url |> Maybe.map sanitizeUrlText |> Maybe.withDefault "<no url>"
 
 
+-- | GET a JSON document from any URL (plain HTTP allowed; prefer getSecure).
 get ::
   (Json.FromJSON response) =>
   Request ->
@@ -339,6 +344,7 @@ getIO options = do
 secureTlsSupportedVersions :: [TLS.Version]
 secureTlsSupportedVersions = [TLS.TLS13, TLS.TLS12]
 
+-- | Build the TLS 1.2+ connection manager shared by every secure request.
 secureTlsManager :: GhcIO.IO HttpClient.Manager
 secureTlsManager = do
   let tlsParams =
@@ -353,10 +359,12 @@ secureTlsManager = do
   HttpClient.newManager managerSettings
 
 {-# NOINLINE cachedSecureTlsManager #-}
+-- | The process-wide secure manager, built once.
 cachedSecureTlsManager :: HttpClient.Manager
 cachedSecureTlsManager = GhcUnsafe.unsafePerformIO secureTlsManager
 
 {-# INLINE getSecure #-}
+-- | GET raw bytes over HTTPS only; returns the status code instead of throwing on 4xx/5xx.
 getSecure ::
   Request ->
   Task Error (Response Bytes)
@@ -455,10 +463,12 @@ applyMethodAndBody method body req =
     |> HttpSimple.setRequestBodyLBS (Bytes.toLazyLegacy body)
 
 
+-- | Read the whole body reader into memory, honouring the size limit.
 readBodyFully :: HttpClient.BodyReader -> GhcIO.IO ByteString
 readBodyFully reader = readBodyChunks reader GhcBSChar.empty
 
 
+-- | Accumulate body chunks until EOF or the size limit.
 readBodyChunks :: HttpClient.BodyReader -> ByteString -> GhcIO.IO ByteString
 readBodyChunks reader accumulatedBody = do
   chunk <- HttpClient.brRead reader
@@ -469,6 +479,7 @@ readBodyChunks reader accumulatedBody = do
       readBodyChunks reader nextBody
 
 
+-- | Reject early when @Content-Length@ already exceeds the limit.
 checkContentLengthHeaderLimit :: Maybe GhcInt.Int -> [(CI.CI ByteString, ByteString)] -> Maybe GhcInt.Int
 checkContentLengthHeaderLimit maxResponseLimit responseHeaders =
   case maxResponseLimit of
@@ -486,6 +497,7 @@ checkContentLengthHeaderLimit maxResponseLimit responseHeaders =
             False -> Nothing
 
 
+-- | Parse a @Content-Length@ value, if well-formed.
 parseContentLengthHeader :: ByteString -> Maybe GhcInt.Int
 parseContentLengthHeader rawContentLength =
   case GhcBSChar.readInt rawContentLength of
@@ -496,6 +508,7 @@ parseContentLengthHeader rawContentLength =
         False -> Nothing
 
 
+-- | First value for a header name, if present.
 findHeaderValue :: CI.CI ByteString -> [(CI.CI ByteString, ByteString)] -> Maybe ByteString
 findHeaderValue headerName headers =
   case headers of
@@ -506,6 +519,7 @@ findHeaderValue headerName headers =
         False -> findHeaderValue headerName remainingHeaders
 
 
+-- | Drain an open response into bytes under the size limit.
 extractResponseBytesFromOpenResponse :: HttpClient.Response HttpClient.BodyReader -> ByteString -> Response Bytes
 extractResponseBytesFromOpenResponse rawResponse responseBody = Response
   { statusCode = rawResponse |> HttpClient.responseStatus |> HttpStatus.statusCode
@@ -514,6 +528,7 @@ extractResponseBytesFromOpenResponse rawResponse responseBody = Response
   }
 
 
+-- | Convert wire headers to @(name, value)@ text pairs.
 extractRawHeaders :: [(CI.CI ByteString, ByteString)] -> Array (Text, Text)
 extractRawHeaders rawHeaders =
   rawHeaders
