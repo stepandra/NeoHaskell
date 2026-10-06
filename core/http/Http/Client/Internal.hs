@@ -3,6 +3,7 @@ module Http.Client.Internal
     -- | WARNING: Does NOT enforce HTTPS. Use 'Http.Client.getSecure' for external APIs.
     -- This module is for internal use only (e.g., localhost OAuth2 discovery per ADR-0018).
     getRaw,
+    sendRaw,
   )
 where
 
@@ -14,7 +15,7 @@ import Bytes qualified
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive qualified as CI
 import Data.Either qualified as GhcEither
-import Http.Client (Request (..), Response (..))
+import Http.Client (Method, Request (..), Response (..))
 import Http.Client qualified as Http
 import Log qualified
 import Map qualified
@@ -41,9 +42,24 @@ import ToText (toText)
 getRaw ::
   Http.Request ->
   Task Http.Error (Http.Response Bytes)
-getRaw options = do
-  Log.debug "HTTP GET (raw/internal)" |> Task.ignoreError
-  response <- getRawInternalIO options
+getRaw options = sendRaw Http.Get options Bytes.empty
+
+
+-- | Performs a byte-level request with any 'Method' without enforcing HTTPS.
+-- The plain-HTTP twin of 'Http.Client.sendSecure': same non-throwing status
+-- handling, same response-size limit, same redirect/proxy defaults.
+--
+-- WARNING: Does NOT enforce HTTPS. Only for trusted loopback endpoints
+-- (local object-store fixtures, OAuth2 discovery per ADR-0018).
+sendRaw ::
+  Method ->
+  Http.Request ->
+  Bytes ->
+  Task Http.Error (Http.Response Bytes)
+sendRaw method options body = do
+  let verb = Http.methodName method
+  Log.debug [fmt|HTTP #{verb} (raw/internal)|] |> Task.ignoreError
+  response <- sendRawInternalIO method options body
     |> Task.fromFailableIO @HttpClient.HttpException
     |> Task.mapError sanitizeInternalHttpError
   case options.maxResponseBytes of
@@ -54,15 +70,18 @@ getRaw options = do
         False -> Task.yield response
 
 
--- | Internal IO action for raw GET request
-getRawInternalIO ::
+-- | Internal IO action for a raw byte-level request
+sendRawInternalIO ::
+  Method ->
   Http.Request ->
+  Bytes ->
   GhcIO.IO (Http.Response Bytes)
-getRawInternalIO options = do
+sendRawInternalIO method options body = do
   baseReq <- parseRequestUrl options
   let req =
         baseReq
           |> applyRequestOptions options
+          |> Http.applyMethodAndBody method body
           |> setRequestIgnoreStatus
   httpResponse <- HttpSimple.httpBS req
   pure (extractResponseBytes httpResponse)

@@ -12,8 +12,12 @@ module Http.Client (
   Response (..),
 
   -- * HTTP Methods
+  Method (..),
+  methodName,
   get,
   getSecure,
+  sendSecure,
+  applyMethodAndBody,
   secureTlsSupportedVersions,
   checkContentLengthHeaderLimit,
   -- ^ Enforces HTTPS (rejects http:// URLs). Use for all external API calls.
@@ -185,6 +189,24 @@ withMaxResponseSize maxBytes options =
       panic [fmt|withMaxResponseSize requires positive bytes, got: #{maxBytes}|]
 
 
+-- | HTTP method for byte-level requests ('sendSecure', 'Http.Client.Internal.sendRaw').
+-- A closed set: protocol clients (object stores, webhooks) pick a verb from here
+-- instead of spelling the wire token themselves.
+data Method = Get | Head | Post | Put | Patch | Delete
+  deriving (Eq, Show)
+
+
+-- | The wire token of a 'Method' ("GET", "HEAD", ...).
+methodName :: Method -> Text
+methodName method = case method of
+  Get -> "GET"
+  Head -> "HEAD"
+  Post -> "POST"
+  Put -> "PUT"
+  Patch -> "PATCH"
+  Delete -> "DELETE"
+
+
 data Error = Error Text
   | InvalidUrl Text
     -- ^ The URL does not use HTTPS. Use getSecure only with https:// URLs.
@@ -338,7 +360,24 @@ cachedSecureTlsManager = GhcUnsafe.unsafePerformIO secureTlsManager
 getSecure ::
   Request ->
   Task Error (Response Bytes)
-getSecure options = do
+getSecure options = sendSecure Get options Bytes.empty
+
+
+-- | Performs a byte-level request with any 'Method', enforcing HTTPS and TLS 1.2+.
+--
+-- Built for protocol clients (object stores, signed webhooks) that need the
+-- status code and headers of every response, including 4xx/5xx: this never
+-- throws on a non-2xx status, never follows redirects beyond 'maxRedirects',
+-- and never decodes the body. The request body is sent as-is; set
+-- @Content-Type@ with 'addHeader'. The response body is bounded by
+-- 'maxResponseBytes' exactly like 'getSecure'.
+-- Use 'Http.Client.Internal.sendRaw' only for trusted loopback endpoints.
+sendSecure ::
+  Method ->
+  Request ->
+  Bytes ->
+  Task Error (Response Bytes)
+sendSecure method options body = do
   let urlText = options.url |> Maybe.withDefault ""
   case Text.startsWith "https://" urlText of
     False ->
@@ -346,30 +385,37 @@ getSecure options = do
       Task.throw (InvalidUrl (sanitizeUrlText urlText))
     True -> do
       let host = requestHost options
-      Log.debug [fmt|HTTP GET (secure) #{host}|] |> Task.ignoreError
-      secureResult <- getSecureRawIO options |> Task.fromIO
+      let verb = methodName method
+      Log.debug [fmt|HTTP #{verb} (secure) #{host}|] |> Task.ignoreError
+      secureResult <- sendSecureRawIO method options body |> Task.fromIO
       case secureResult of
         Err error -> Task.throw error
         Ok response -> checkResponseSize options response
 
 
--- | Internal IO action for secure raw GET request using TLS 1.2+ only.
-getSecureRawIO :: Request -> GhcIO.IO (Result Error (Response Bytes))
-getSecureRawIO options = do
+-- | Internal IO action for a secure byte-level request using TLS 1.2+ only.
+sendSecureRawIO :: Method -> Request -> Bytes -> GhcIO.IO (Result Error (Response Bytes))
+sendSecureRawIO method options body = do
   httpResult <-
     case options.maxResponseBytes of
       Nothing ->
         GhcException.try @HttpClient.HttpException do
-          response <- getRawIO options
+          response <- sendRawIO method options body
           pure (Ok response)
       Just _ ->
         GhcException.try @HttpClient.HttpException do
           baseReq <- parseRequestUrl options
           let req = baseReq
                 |> applyRequestOptions options
+                |> applyMethodAndBody method body
                 |> setRequestIgnoreStatus
           rawResponse <- HttpClient.responseOpen req cachedSecureTlsManager
-          case checkContentLengthHeaderLimit options.maxResponseBytes (HttpClient.responseHeaders rawResponse) of
+          -- A HEAD response announces the body it does NOT send; only the
+          -- post-read check applies to it.
+          let declaredLimit = case method of
+                Head -> Nothing
+                _ -> checkContentLengthHeaderLimit options.maxResponseBytes (HttpClient.responseHeaders rawResponse)
+          case declaredLimit of
             Just maxBytes -> do
               HttpClient.responseClose rawResponse
               pure (Err (ResponseTooLarge maxBytes))
@@ -384,18 +430,29 @@ getSecureRawIO options = do
     GhcEither.Right responseResult -> pure responseResult
 
 
--- | Internal IO action for secure raw GET request using TLS 1.2+ only.
-getRawIO ::
+-- | Internal IO action for an unbounded secure byte-level request using TLS 1.2+ only.
+sendRawIO ::
+  Method ->
   Request ->
+  Bytes ->
   GhcIO.IO (Response Bytes)
-getRawIO options = do
+sendRawIO method options body = do
   baseReq <- parseRequestUrl options
   let req = baseReq
         |> applyRequestOptions options
+        |> applyMethodAndBody method body
         |> setRequestIgnoreStatus
         |> HttpSimple.setRequestManager cachedSecureTlsManager
   httpResponse <- HttpSimple.httpBS req
   pure (extractResponseBytes httpResponse)
+
+
+-- | Set the wire method and the raw request body. Shared with 'Http.Client.Internal'.
+applyMethodAndBody :: Method -> Bytes -> HttpClient.Request -> HttpClient.Request
+applyMethodAndBody method body req =
+  req
+    |> HttpSimple.setRequestMethod (methodName method |> Text.convert)
+    |> HttpSimple.setRequestBodyLBS (Bytes.toLazyLegacy body)
 
 
 readBodyFully :: HttpClient.BodyReader -> GhcIO.IO ByteString
