@@ -18,8 +18,8 @@ spec :: Spec Unit
 spec = do
   describe "WebTransport bind host and port" do
     describe "defaults" do
-      it "server binds all interfaces by default" \_ -> do
-        server.host |> shouldBe "*"
+      it "server binds all IPv4 interfaces by default (unchanged from Warp.run)" \_ -> do
+        server.host |> shouldBe "*4"
 
       it "server listens on port 8080 by default" \_ -> do
         server.port |> shouldBe 8080

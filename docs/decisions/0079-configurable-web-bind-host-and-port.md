@@ -18,11 +18,12 @@ Add `host :: Text` to `WebTransport` and start Warp with `runSettings`, using
 `setPort` and `setHost`. The text maps to Warp's `HostPreference`: `"*"` all
 interfaces, `"*4"`, `"*6"`, or a literal address such as `"127.0.0.1"`.
 
-The default is `"*"`, not loopback. The previous `Warp.run` bound IPv4 only
-(`"*4"`); `"*"` also listens on IPv6, which keeps every address that worked
-before reachable and adds none that was reachable only by accident. A loopback
-default would silently break containers and any app that is reached from
-another machine, so safer-by-default is left to the app (`withHost`).
+The default is `"*4"`: exactly what the previous `Warp.run` bound (all IPv4
+interfaces). A loopback default would silently break containers and any app
+that is reached from another machine; a `"*"` default would silently start
+listening on IPv6 too, a new reachable surface on dual-stack hosts whose
+firewall rules only cover IPv4. Neither change belongs in a "make it
+configurable" PR, so both loopback-only and IPv6 are opt-in through `withHost`.
 
 Add `Application.withHost` and `Application.withPort`, stored as `bindHost` and
 `bindPort` and applied when the web transport starts. They are on `Application`,

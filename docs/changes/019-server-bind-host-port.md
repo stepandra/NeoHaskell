@@ -4,8 +4,8 @@ The web server always bound Warp's default host on a port fixed in code, so an
 app running behind a reverse proxy could not restrict itself to loopback and
 could not choose its port without building a `WebTransport` by hand. The
 maintainer accepted a loopback-bind fix and asked to "make the port configurable
-too". `WebTransport` gains a `host` field (default `"*"`, all interfaces, so
-behaviour is unchanged) and `Application` gains `withHost` and `withPort`
+too". `WebTransport` gains a `host` field (default `"*4"`, all IPv4 interfaces —
+exactly what `Warp.run` bound before, so behaviour is unchanged) and `Application` gains `withHost` and `withPort`
 builders next to the other `with*` builders. `runTransport` now starts Warp with
 `runSettings` built from that host and port, and logs `<host>:<port>`.
 
@@ -60,7 +60,7 @@ named; nothing else changes. Apps that use `WebTransport.server`, including
 `server { port = ... }`, and apps built with `Application.new` and the `with*`
 builders are unaffected and keep binding all interfaces on port 8080 unless they
 opt in. Migration: a program that writes `WebTransport { ... }` with all fields
-must add `host = "*"` (the previous behaviour) or `host = "127.0.0.1"` for
+must add `host = "*4"` (the previous behaviour) or `host = "127.0.0.1"` for
 loopback only; a program that writes `Application { ... }` with all fields must
 add `bindHost = Nothing` and `bindPort = Nothing`. The testbed uses
 `WebTransport.server` with no overrides, so its behaviour is unchanged.
@@ -71,4 +71,4 @@ literal address.
 ## ADR
 
 [ADR-0079](../decisions/0079-configurable-web-bind-host-and-port.md): why the
-default stays `"*"` and why the overrides live on `Application`.
+default stays `"*4"` (no new IPv6 surface) and why the overrides live on `Application`.

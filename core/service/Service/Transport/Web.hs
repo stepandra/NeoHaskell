@@ -154,8 +154,8 @@ data WebTransport = WebTransport
     --
     -- * @"127.0.0.1"@ (or any literal address such as @"::1"@): that address only.
     --   Loopback-only is recommended behind a reverse proxy.
-    -- * @"*"@: all interfaces, IPv4 and IPv6 (the default).
-    -- * @"*4"@ / @"*6"@: all IPv4 / all IPv6 interfaces.
+    -- * @"*4"@: all IPv4 interfaces (the default; what @Warp.run@ bound before).
+    -- * @"*"@: all interfaces, IPv4 and IPv6. @"*6"@: all IPv6 interfaces.
     host :: Text,
     maxBodySize :: Int,
     -- | Optional JWT authentication. Set via Application.withAuth.
@@ -190,7 +190,7 @@ deriveKnownHash "WebTransport"
 
 -- | Default WebTransport configuration.
 -- Port defaults to 8080.
--- Host defaults to "*" (all interfaces) - use Application.withHost "127.0.0.1" to bind loopback only.
+-- Host defaults to "*4" (all IPv4 interfaces, unchanged from Warp.run) - use Application.withHost "127.0.0.1" to bind loopback only, or "*" to add IPv6.
 -- Max body size defaults to 1MB (1048576 bytes) to prevent DoS attacks.
 -- Auth is disabled by default - use Application.withAuth to enable.
 -- OAuth2 is disabled by default - use Application.withOAuth2Provider to enable.
@@ -200,7 +200,7 @@ server :: WebTransport
 server =
   WebTransport
     { port = 8080,
-      host = "*",
+      host = "*4",
       maxBodySize = 1048576,
       authEnabled = Nothing,
       oauth2Config = Nothing,
