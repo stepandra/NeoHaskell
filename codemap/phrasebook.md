@@ -206,6 +206,27 @@ Set (fromList [1,2,3])
 "Cart"
 ```
 
+## file-upload
+
+### Service.FileUpload.BlobStore.S3
+
+```haskell
+>>> isDnsBucketName "my-bucket"
+True
+```
+
+```haskell
+>>> isDnsBucketName "My_Bucket"
+False
+```
+
+### Service.FileUpload.BlobStore.S3.SigV4
+
+```haskell
+>>> Text.toBytes "" |> sha256Hex
+"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+```
+
 ## postgres-infra
 
 ### Service.Infra.Postgres.SslMode
@@ -249,4 +270,4 @@ True
 
 ---
 
-*34 example sessions · modules with ZERO doctests: 314 (the documentation backlog — see codemap/.doc-ratchet)*
+*37 example sessions · modules with ZERO doctests: 314 (the documentation backlog — see codemap/.doc-ratchet)*

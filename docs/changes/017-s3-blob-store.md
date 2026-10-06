@@ -23,8 +23,10 @@ new-extension-point: false
 
 ## Contract delta
 
-Depends on change 016 (`Http.Client.sendSecure` / `Http.Client.Internal.sendRaw`);
-this PR is stacked on it. `SigV4` is exported as its own module so the signing
+Depends on change 016 (`Http.Client.sendSecure` / `Http.Client.Internal.sendRaw`)
+and change 021 (`Crypto.sha256`, `Crypto.hmacSha256`, `Crypto.toHex`); this PR
+is stacked on them, so `SigV4` imports nothing from `crypton` or
+`Data.ByteArray` and never unwraps `Bytes`. `SigV4` is exported as its own module so the signing
 steps are unit-testable against the AWS reference vectors; applications are
 expected to use only `S3Config` and `createBlobStore`.
 

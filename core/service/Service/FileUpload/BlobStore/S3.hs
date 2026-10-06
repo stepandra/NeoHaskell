@@ -99,6 +99,7 @@ createBlobStore config = do
 -- Validation
 -- ==========================================================================
 
+-- | Check the endpoint scheme, bucket name and credentials once, before any request.
 validateConfig :: S3Config -> Task Text S3Store
 validateConfig config = do
   Task.when
@@ -121,6 +122,13 @@ validateConfig config = do
       }
 
 
+-- | True for a bucket name that is valid in a path-style S3 URL.
+--
+-- >>> isDnsBucketName "my-bucket"
+-- True
+--
+-- >>> isDnsBucketName "My_Bucket"
+-- False
 isDnsBucketName :: Text -> Bool
 isDnsBucketName name = do
   let validChar char = (Char.isLower char && Char.toCode char < 128) || Char.isDigit char || char == '-' || char == '.'
@@ -155,6 +163,7 @@ parseEndpoint raw = do
   Task.yield Endpoint {url = trimmed, hostHeader, secure = isSecure}
 
 
+-- | Remove one trailing slash so paths join without doubling it.
 stripTrailingSlash :: Text -> Text
 stripTrailingSlash text = if Text.endsWith "/" text then Text.dropRight 1 text else text
 
@@ -169,6 +178,7 @@ hostOf authority =
     else Text.split ":" authority |> Array.first |> Maybe.withDefault authority
 
 
+-- | True for literal loopback hosts, the only ones allowed over plain HTTP.
 isLoopback :: Text -> Bool
 isLoopback host = host == "127.0.0.1" || host == "localhost" || host == "[::1]"
 
@@ -177,12 +187,14 @@ isLoopback host = host == "127.0.0.1" || host == "localhost" || host == "[::1]"
 -- Operations
 -- ==========================================================================
 
+-- | 'BlobStore.store': PUT the bytes; any non-2xx is a storage error.
 storeImpl :: S3Store -> BlobKey -> Bytes -> Task BlobStoreError Unit
 storeImpl store blobKey bytes = do
   response <- sendObject store Put blobKey bytes
   Task.unless (response.statusCode == 200) (Task.throw (statusError response))
 
 
+-- | 'BlobStore.retrieve': GET; 404 is 'BlobNotFound', other non-2xx are errors.
 retrieveImpl :: S3Store -> BlobKey -> Task BlobStoreError Bytes
 retrieveImpl store blobKey = do
   response <- sendObject store Get blobKey Bytes.empty
@@ -203,6 +215,7 @@ deleteImpl store blobKey = do
   Task.unless gone (Task.throw (statusError response))
 
 
+-- | 'BlobStore.exists': HEAD; 200 is True, 404 is False, anything else is an error.
 existsImpl :: S3Store -> BlobKey -> Task BlobStoreError Bool
 existsImpl store blobKey = do
   response <- sendObject store Head blobKey Bytes.empty
@@ -240,6 +253,7 @@ sendObject store method blobKey body = do
     |> Task.mapError transportError
 
 
+-- | Map a transport failure to 'StorageError' without leaking the signed request.
 transportError :: Http.Error -> BlobStoreError
 transportError err = case err of
   Http.ResponseTooLarge limit -> StorageError [fmt|S3 response exceeded #{limit} bytes|]
@@ -281,6 +295,7 @@ maxObjectBytes :: Int
 maxObjectBytes = 256 * 1024 * 1024
 
 
+-- | Add every header pair to the request, in order.
 withHeaders :: Array (Text, Text) -> Request -> Request
 withHeaders headers request =
   headers

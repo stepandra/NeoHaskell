@@ -31,10 +31,7 @@ import Bytes (Bytes)
 import Bytes qualified
 import Char (Char)
 import Char qualified
-import Crypto.Hash qualified as Hash
-import Crypto.MAC.HMAC qualified as HMAC
-import Data.ByteArray qualified as ByteArray
-import Data.ByteArray.Encoding qualified as Encoding
+import Crypto qualified
 import Data.Word (Word8)
 import DateTime (DateTime)
 import DateTime qualified
@@ -142,12 +139,14 @@ formatAmzDate instant = do
 
 
 -- | Lowercase hex SHA-256 of raw bytes (also the hash of the empty payload).
+--
+-- >>> Text.toBytes "" |> sha256Hex
+-- "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 sha256Hex :: Bytes -> Text
 sha256Hex bytes =
-  (Hash.hash (Bytes.unwrap bytes) :: Hash.Digest Hash.SHA256)
-    |> ByteArray.convert
-    |> Bytes.fromLegacy
-    |> hex
+  bytes
+    |> Crypto.sha256
+    |> Crypto.toHex
 
 
 -- | AWS URI encoding: unreserved characters pass through, everything else
@@ -164,6 +163,7 @@ uriEncode text =
 -- Internals
 -- ==========================================================================
 
+-- | The @date/region/s3/aws4_request@ scope string.
 credentialScope :: Credentials -> DateTime -> Text
 credentialScope credentials instant = do
   let date = dateStamp instant
@@ -171,6 +171,7 @@ credentialScope credentials instant = do
   [fmt|#{date}/#{region}/s3/aws4_request|]
 
 
+-- | UTC date as @YYYYMMDD@.
 dateStamp :: DateTime -> Text
 dateStamp instant = formatAmzDate instant |> Text.left 8
 
@@ -183,10 +184,12 @@ normalizedHeaders headers =
     |> sortPairs
 
 
+-- | Collapse runs of spaces to one, as canonical header values require.
 collapseSpaces :: Text -> Text
 collapseSpaces value = Text.words value |> Text.joinWith " "
 
 
+-- | Sort pairs by key (byte order), the canonical header and query order.
 sortPairs :: Array (Text, Text) -> Array (Text, Text)
 sortPairs pairs =
   pairs
@@ -195,6 +198,7 @@ sortPairs pairs =
     |> Array.fromLinkedList
 
 
+-- | URI-encode one character per the SigV4 rules (unreserved characters pass through).
 encodeChar :: Char -> Text
 encodeChar char =
   if isUnreserved char
@@ -208,11 +212,13 @@ encodeChar char =
         |> Text.concat
 
 
+-- | RFC 3986 unreserved: letters, digits, @-@, @_@, @.@, @~@.
 isUnreserved :: Char -> Bool
 isUnreserved char =
   (Char.isAlphaNum char && Char.toCode char < 128) || char == '-' || char == '_' || char == '.' || char == '~'
 
 
+-- | Two uppercase hex digits for one byte, as percent-encoding requires.
 byteHex :: Word8 -> Text
 byteHex byte = do
   let value = fromIntegral byte :: Int
@@ -220,19 +226,14 @@ byteHex byte = do
   Text.fromArray [digit (value // 16), digit (modBy 16 value)]
 
 
+-- | Lowercase hex via 'Crypto.toHex'.
 hex :: Bytes -> Text
-hex bytes =
-  (Encoding.convertToBase Encoding.Base16 (Bytes.unwrap bytes) :: ByteArray.Bytes)
-    |> ByteArray.convert
-    |> Bytes.fromLegacy
-    |> Text.fromBytes
+hex = Crypto.toHex
 
 
+-- | Raw HMAC-SHA256 via 'Crypto.hmacSha256'; chained to derive the signing key.
 hmac :: Bytes -> Bytes -> Bytes
-hmac key message =
-  (HMAC.hmac (Bytes.unwrap key) (Bytes.unwrap message) :: HMAC.HMAC Hash.SHA256)
-    |> ByteArray.convert
-    |> Bytes.fromLegacy
+hmac = Crypto.hmacSha256
 
 
 -- | Proleptic Gregorian civil time from Unix seconds (Howard Hinnant's
