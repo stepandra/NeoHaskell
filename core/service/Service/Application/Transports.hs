@@ -58,10 +58,14 @@ runTransports ::
   -- ^ Optional integration selection status for /health reporting
   Maybe ReadinessConfig ->
   -- ^ Optional readiness endpoint configuration for WebTransport
+  Maybe Text ->
+  -- ^ Optional bind host override for WebTransport (Application.withHost)
+  Maybe Int ->
+  -- ^ Optional bind port override for WebTransport (Application.withPort)
   QuerySubscriber ->
   -- ^ The live subscriber whose readiness state /ready will reflect
   Task Text Unit
-runTransports transportsMap endpointsByTransport schemasByTransport queryEndpoints querySchemas maybeWebAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig subscriber = do
+runTransports transportsMap endpointsByTransport schemasByTransport queryEndpoints querySchemas maybeWebAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig maybeHost maybePort subscriber = do
   transportsMap
     |> Map.entries
     |> Task.forEach \(transportName, transportVal) -> do
@@ -84,7 +88,7 @@ runTransports transportsMap endpointsByTransport schemasByTransport queryEndpoin
 
         -- Handle WebTransport specially to configure auth, OAuth2, and file uploads
         case transportName of
-          "WebTransport" -> runWebTransport transportVal commandEndpointsForTransport commandSchemasForTransport queryEndpoints querySchemas maybeWebAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig subscriber
+          "WebTransport" -> runWebTransport transportVal commandEndpointsForTransport commandSchemasForTransport queryEndpoints querySchemas maybeWebAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig maybeHost maybePort subscriber
           _ -> runGenericTransport transportVal commandEndpointsForTransport commandSchemasForTransport queryEndpoints querySchemas
 
 
@@ -110,9 +114,11 @@ runWebTransport ::
   Maybe HealthCheckConfig ->
   Maybe IntegrationStatus ->
   Maybe ReadinessConfig ->
+  Maybe Text ->
+  Maybe Int ->
   QuerySubscriber ->
   Task Text Unit
-runWebTransport transportVal commandEndpoints commandSchemas queryEndpoints querySchemas maybeAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig subscriber = do
+runWebTransport transportVal commandEndpoints commandSchemas queryEndpoints querySchemas maybeAuth maybeOAuth2 maybeFileUpload maybeApiInfo maybeCors maybeHealthCheck maybeIntegrationStatus maybeReadinessConfig maybeHost maybePort subscriber = do
   case transportVal of
     TransportValue transport -> do
       -- Cast the existentially-typed transport to WebTransport
@@ -136,6 +142,8 @@ runWebTransport transportVal commandEndpoints commandSchemas queryEndpoints quer
             , integrationStatus = maybeIntegrationStatus
             , readinessConfig = maybeReadinessConfig
             , readinessProbe = Just (Subscriber.readinessOf subscriber)
+            , host = maybeHost |> Maybe.withDefault baseWebTransport.host
+            , port = maybePort |> Maybe.withDefault baseWebTransport.port
             }
       -- Build endpoints with the configured transport
       let endpoints :: Endpoints WebTransport =

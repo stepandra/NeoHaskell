@@ -7,6 +7,8 @@ module Service.Transport.Web (
   HealthCheckConfig (..),
   IntegrationStatus (..),
   server,
+  hostPreference,
+  warpSettings,
   isHealthCheckPath,
   buildHealthResponse,
   isReadinessPath,
@@ -148,6 +150,13 @@ data IntegrationStatus = IntegrationStatus
 -- | HTTP/JSON transport using WAI/Warp.
 data WebTransport = WebTransport
   { port :: Int,
+    -- | Interface to bind. Set via Application.withHost.
+    --
+    -- * @"127.0.0.1"@ (or any literal address such as @"::1"@): that address only.
+    --   Loopback-only is recommended behind a reverse proxy.
+    -- * @"*"@: all interfaces, IPv4 and IPv6 (the default).
+    -- * @"*4"@ / @"*6"@: all IPv4 / all IPv6 interfaces.
+    host :: Text,
     maxBodySize :: Int,
     -- | Optional JWT authentication. Set via Application.withAuth.
     authEnabled :: Maybe AuthEnabled,
@@ -181,6 +190,7 @@ deriveKnownHash "WebTransport"
 
 -- | Default WebTransport configuration.
 -- Port defaults to 8080.
+-- Host defaults to "*" (all interfaces) - use Application.withHost "127.0.0.1" to bind loopback only.
 -- Max body size defaults to 1MB (1048576 bytes) to prevent DoS attacks.
 -- Auth is disabled by default - use Application.withAuth to enable.
 -- OAuth2 is disabled by default - use Application.withOAuth2Provider to enable.
@@ -190,6 +200,7 @@ server :: WebTransport
 server =
   WebTransport
     { port = 8080,
+      host = "*",
       maxBodySize = 1048576,
       authEnabled = Nothing,
       oauth2Config = Nothing,
@@ -201,6 +212,25 @@ server =
       readinessConfig = Nothing,
       readinessProbe = Nothing
     }
+
+
+-- | Convert a 'WebTransport' host setting into a Warp 'Warp.HostPreference'.
+--
+-- @"*"@ is all interfaces, @"*4"@ and @"*6"@ are all IPv4 / IPv6 interfaces,
+-- anything else is a literal address or hostname.
+hostPreference :: Text -> Warp.HostPreference
+hostPreference hostText =
+  hostText
+    |> Text.toLinkedList
+    |> fromString
+
+
+-- | Warp settings that bind the transport's configured host and port.
+warpSettings :: WebTransport -> Warp.Settings
+warpSettings transport =
+  Warp.defaultSettings
+    |> Warp.setPort transport.port
+    |> Warp.setHost (hostPreference transport.host)
 
 
 -- | Read request body with a size limit to prevent DoS attacks.
@@ -1044,12 +1074,13 @@ instance Transport WebTransport where
           Maybe.Nothing -> baseApp
           Maybe.Just cors -> corsMiddleware cors baseApp
 
-    -- Start the Warp server on the specified port
+    -- Start the Warp server on the configured host and port
+    let host = transport.host
     let port = transport.port
     Log.withScope [("component", "WebTransport")] do
-      Log.info [fmt|Starting WebTransport server on port #{port}|]
+      Log.info [fmt|Starting WebTransport server on #{host}:#{port}|]
         |> Task.ignoreError
-    Warp.run transport.port waiApp |> Task.fromIO
+    Warp.runSettings (warpSettings transport) waiApp |> Task.fromIO
 
 
   buildHandler ::

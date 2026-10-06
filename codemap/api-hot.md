@@ -46,7 +46,7 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 ## Text
 
 - `fromLinkedList :: LinkedList Char -> Text`  <!-- 90 call sites -->
-- `toLinkedList :: Text -> LinkedList Char`  <!-- 78 call sites -->
+- `toLinkedList :: Text -> LinkedList Char`  <!-- 79 call sites -->
 - `toBytes :: Text -> Bytes`  <!-- 66 call sites -->
 - `replace :: Text -> Text -> Text -> Text`  <!-- 33 call sites -->
 - `fromBytes :: Bytes -> Text`  <!-- 27 call sites -->
@@ -130,7 +130,7 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 
 ## Maybe
 
-- `withDefault :: a -> Maybe a -> a`  <!-- 56 call sites -->
+- `withDefault :: a -> Maybe a -> a`  <!-- 58 call sites -->
 - `map :: (a -> b) -> Maybe a -> Maybe b`  <!-- 14 call sites -->
 - `getOrDie :: HasCallStack => Maybe a -> a`  <!-- 9 call sites -->
 - `andThen :: (a -> Maybe b) -> Maybe a -> Maybe b`  <!-- 4 call sites -->
