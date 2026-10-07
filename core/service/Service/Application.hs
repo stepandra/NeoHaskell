@@ -1802,8 +1802,9 @@ withoutHealthCheck app =
 -- | Set the interface the WebTransport binds.
 --
 -- Overrides the host of the registered 'Web.server', whatever the order of
--- 'withTransport' and 'withHost'. Without it the transport binds all
--- interfaces (@"*"@).
+-- 'withTransport' and 'withHost'. Without it the transport keeps the
+-- registered transport's host; 'Web.server' defaults to all IPv4 interfaces
+-- (@"*4"@, unchanged from the previous @Warp.run@).
 --
 -- * @"127.0.0.1"@ (or any literal address such as @"::1"@): that address only.
 --   Loopback-only is recommended behind a reverse proxy.

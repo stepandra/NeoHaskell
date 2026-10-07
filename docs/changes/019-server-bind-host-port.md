@@ -47,19 +47,21 @@ transport's host and port to Warp settings.
 
 | ID | Behavior | Proving test | Level | Boundary |
 |----|----------|--------------|-------|----------|
-| C1 | `WebTransport` binds all interfaces on port 8080 by default, exactly as before | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#server binds all interfaces by default`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#server listens on port 8080 by default` | unit | none |
+| C1 | `WebTransport` binds all IPv4 interfaces on port 8080 by default, exactly as before (`Warp.run`) | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#server binds all IPv4 interfaces by default (unchanged from Warp.run)`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#server listens on port 8080 by default` | unit | none |
 | C2 | `Application.withHost` / `Application.withPort` record the bind host and port, and a new `Application` leaves them unset | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#withHost records the bind host`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#withPort records the bind port`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#bind host and port are unset on a new Application` | unit | none |
 | C3 | The host text maps to the right Warp `HostPreference` (`127.0.0.1`, `*`, `*4`, `*6`, `::1`) | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#maps a literal IPv4 address to that host`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#maps * to all interfaces`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#maps *4 to all IPv4 interfaces`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#maps *6 to all IPv6 interfaces`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#maps a literal IPv6 address to that host` | unit | none |
 | C4 | The Warp settings the transport runs with carry the configured host and port | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#carries the configured host and port into Warp` | unit | none |
-| C5 | An application started with `withHost "127.0.0.1"` and `withPort <free port>` answers `GET /health` on loopback | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#serves /health on loopback when bound to 127.0.0.1` | unit | none |
+| C5 | An application started with `withHost "127.0.0.1"` and `withPort <free port>` answers `GET /health` on loopback | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#serves /health on loopback when bound to 127.0.0.1` | integration | http:real |
+| C6 | Overrides apply whatever the order of `withTransport` and the builders; an absent override preserves the transport's own host/port | `hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#withHost and withPort apply whether they come before or after withTransport`<br>`hspec:nhcore-test-service:core/test/Service/Transport/Web/BindSpec.hs#absent overrides preserve the transport's custom host and port` | unit | none |
 
 ## User impact
 
 Breaking only for code that builds the records positionally or with every field
-named; nothing else changes. Apps that use `WebTransport.server`, including
-`server { port = ... }`, and apps built with `Application.new` and the `with*`
-builders are unaffected and keep binding all interfaces on port 8080 unless they
-opt in. Migration: a program that writes `WebTransport { ... }` with all fields
+named; nothing else changes. Apps that use `WebTransport.server` and apps built with `Application.new`
+and the `with*` builders are unaffected and keep binding all IPv4 interfaces
+on port 8080 unless they opt in; an app that already sets `server { port = ... }`
+keeps that port, because an absent `withPort` preserves the transport's own
+setting. Migration: a program that writes `WebTransport { ... }` with all fields
 must add `host = "*4"` (the previous behaviour) or `host = "127.0.0.1"` for
 loopback only; a program that writes `Application { ... }` with all fields must
 add `bindHost = Nothing` and `bindPort = Nothing`. The testbed uses

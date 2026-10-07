@@ -1808,6 +1808,7 @@ WebTransport :: Int -> Text -> Int -> Maybe AuthEnabled -> Maybe OAuth2Config ->
 [readinessConfig] :: WebTransport -> Maybe ReadinessConfig
 [readinessProbe] :: WebTransport -> Maybe (Task Text Readiness)
 [routes] :: OAuth2Config -> OAuth2Routes
+applyBindOverrides :: Maybe Text -> Maybe Int -> WebTransport -> WebTransport
 buildHealthResponse :: WebTransport -> ByteString
 data AuthEnabled
 data CorsConfig

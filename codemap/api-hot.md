@@ -294,13 +294,13 @@ when WRITING TESTS; they are not feature-code frequency signal.
 
 ## Task
 
-- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 824 test call sites -->
-- `yield :: value -> Task w value`  <!-- 466 test call sites -->
-- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 283 test call sites -->
+- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 825 test call sites -->
+- `yield :: value -> Task w value`  <!-- 468 test call sites -->
+- `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 284 test call sites -->
 - `mapArray :: (element -> Task err output) -> Array element -> Task err (Array output)`  <!-- 126 test call sites -->
-- `throw :: err -> Task err w`  <!-- 118 test call sites -->
+- `throw :: err -> Task err w`  <!-- 120 test call sites -->
+- `fromIO :: IO value -> Task w value`  <!-- 95 test call sites -->
 - `andThen :: (input -> Task err output) -> Task err input -> Task err output`  <!-- 92 test call sites -->
-- `fromIO :: IO value -> Task w value`  <!-- 90 test call sites -->
 - `map :: (input -> output) -> Task err input -> Task err output`  <!-- 83 test call sites -->
 
 ## Array
@@ -377,4 +377,4 @@ when WRITING TESTS; they are not feature-code frequency signal.
 - `generateV5 :: Uuid -> Text -> Uuid`  <!-- 19 test call sites -->
 - `fromText :: Text -> Maybe Uuid`  <!-- 3 test call sites -->
 
-*cut: 138 more modules (Map (257), Service.Application (250), Set (233), AsyncTask (223), Stream (212), …) — full surface: codemap/signatures/*
+*cut: 138 more modules (Service.Application (269), Map (257), Set (233), AsyncTask (226), Stream (212), …) — full surface: codemap/signatures/*

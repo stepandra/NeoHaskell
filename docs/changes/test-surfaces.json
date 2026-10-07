@@ -208,6 +208,15 @@
       "boundary": "postgres:real",
       "expected_examples": 1,
       "fixture": "Service.QueryObjectStore.Postgres"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
+      "path": "core/test/Service/Transport/Web/BindSpec.hs",
+      "match": "serves /health on loopback when bound to 127.0.0.1",
+      "boundary": "http:real",
+      "expected_examples": 1,
+      "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
     }
   ]
 }

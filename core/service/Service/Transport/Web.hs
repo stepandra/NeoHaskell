@@ -9,6 +9,7 @@ module Service.Transport.Web (
   server,
   hostPreference,
   warpSettings,
+  applyBindOverrides,
   isHealthCheckPath,
   buildHealthResponse,
   isReadinessPath,
@@ -44,6 +45,7 @@ import Json qualified
 import LinkedList qualified
 import Map qualified
 import Maybe (Maybe (..))
+import Maybe qualified
 import Network.HTTP.Types.Header qualified as HTTP
 import Network.HTTP.Types.Method qualified as GhcMethod
 import Network.HTTP.Types.Status qualified as HTTP
@@ -231,6 +233,19 @@ warpSettings transport =
   Warp.defaultSettings
     |> Warp.setPort transport.port
     |> Warp.setHost (hostPreference transport.host)
+
+
+-- | Apply the application-level bind overrides ('Application.withHost' /
+-- 'Application.withPort') to a registered transport. An absent override keeps
+-- the transport's own setting, so a custom @server { port = ... }@ survives
+-- when only the host is overridden (and the other way round). Pure, so the
+-- composition rule is testable without starting a server.
+applyBindOverrides :: Maybe Text -> Maybe Int -> WebTransport -> WebTransport
+applyBindOverrides maybeHost maybePort transport =
+  transport
+    { host = maybeHost |> Maybe.withDefault transport.host
+    , port = maybePort |> Maybe.withDefault transport.port
+    }
 
 
 -- | Read request body with a size limit to prevent DoS attacks.

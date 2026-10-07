@@ -38,5 +38,6 @@ whatever the order of `withTransport` and the builder.
   are unaffected.
 - Apps can bind loopback only, or choose the port, in one line.
 - The start-up log now shows `<host>:<port>`.
-- The default now also accepts IPv6 connections (it was IPv4 only). Apps that
-  need IPv4 only can set `"*4"`.
+- The default is unchanged: all IPv4 interfaces (`"*4"`), exactly what
+  `Warp.run` bound before. IPv6 (`"*"` or `"*6"`) and loopback-only are opt-in
+  through `withHost`.

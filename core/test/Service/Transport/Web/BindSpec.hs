@@ -9,7 +9,7 @@ import Network.Wai.Handler.Warp qualified as GhcWarp
 import Service.Application (Application (..))
 import Service.Application qualified as Application
 import Service.EventStore.InMemory qualified as InMemory
-import Service.Transport.Web (WebTransport (..), hostPreference, server, warpSettings)
+import Service.Transport.Web (WebTransport (..), applyBindOverrides, hostPreference, server, warpSettings)
 import Task qualified
 import Test
 
@@ -52,6 +52,36 @@ spec = do
 
       it "maps a literal IPv6 address to that host" \_ -> do
         show (hostPreference "::1") |> shouldBe "Host \"::1\""
+
+    describe "override composition" do
+      it "withHost and withPort apply whether they come before or after withTransport" \_ -> do
+        let before =
+              Application.new
+                |> Application.withHost "127.0.0.1"
+                |> Application.withPort 9191
+                |> Application.withTransport server
+        let after =
+              Application.new
+                |> Application.withTransport server
+                |> Application.withHost "127.0.0.1"
+                |> Application.withPort 9191
+        let bound app = applyBindOverrides app.bindHost app.bindPort server
+        (bound before).host |> shouldBe "127.0.0.1"
+        (bound before).port |> shouldBe 9191
+        (bound after).host |> shouldBe "127.0.0.1"
+        (bound after).port |> shouldBe 9191
+
+      it "absent overrides preserve the transport's custom host and port" \_ -> do
+        let custom = server {host = "::1", port = 7070}
+        let untouched = applyBindOverrides Nothing Nothing custom
+        untouched.host |> shouldBe "::1"
+        untouched.port |> shouldBe 7070
+        let hostOnly = applyBindOverrides (Just "127.0.0.1") Nothing custom
+        hostOnly.host |> shouldBe "127.0.0.1"
+        hostOnly.port |> shouldBe 7070
+        let portOnly = applyBindOverrides Nothing (Just 9191) custom
+        portOnly.host |> shouldBe "::1"
+        portOnly.port |> shouldBe 9191
 
     describe "warpSettings" do
       it "carries the configured host and port into Warp" \_ -> do
