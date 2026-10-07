@@ -1807,9 +1807,17 @@ withoutHealthCheck app =
 -- (@"*4"@, unchanged from the previous @Warp.run@).
 --
 -- * @"127.0.0.1"@ (or any literal address such as @"::1"@): that address only.
---   Loopback-only is recommended behind a reverse proxy.
+--   Loopback-only suits a reverse proxy in the same network namespace (same
+--   host or container, shared pod network). A proxy in a separate namespace
+--   cannot reach a loopback listener; keep a non-loopback bind there.
 -- * @"*"@: all interfaces, IPv4 and IPv6.
 -- * @"*4"@ / @"*6"@: all IPv4 / all IPv6 interfaces.
+--
+-- The value is checked when the server starts ('Web.validateBindHost'): an
+-- empty host, a URL such as @"http://127.0.0.1"@, a @host:port@ pair or
+-- whitespace fails 'run' with @Application.withHost: ...@ before any socket is
+-- opened. An address this machine does not own fails at bind time with
+-- @WebTransport could not bind <host>:<port>@.
 --
 -- Example:
 --
@@ -1831,6 +1839,10 @@ withHost host app =
 --
 -- Overrides the port of the registered 'Web.server' (default 8080), whatever
 -- the order of 'withTransport' and 'withPort'.
+--
+-- Accepted range is 1..65535 ('Web.validateBindPort'). Port 0 is rejected:
+-- the OS would pick a port that nothing reports back. A port already in use
+-- fails at bind time with @WebTransport could not bind <host>:<port>@.
 --
 -- Example:
 --

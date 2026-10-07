@@ -1827,6 +1827,8 @@ respondReadiness :: WebTransport -> (Response -> Task Text ResponseReceived) -> 
 server :: WebTransport
 unauthorizedResponse :: AccessError -> (Status, Text)
 unauthorizedResponseBody :: Text -> Text
+validateBindHost :: Text -> Maybe Text
+validateBindPort :: Int -> Maybe Text
 warpSettings :: WebTransport -> Settings
 
 module Service.Transport.Web.BuiltinSchemas

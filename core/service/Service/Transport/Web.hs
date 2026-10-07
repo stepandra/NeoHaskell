@@ -10,6 +10,8 @@ module Service.Transport.Web (
   hostPreference,
   warpSettings,
   applyBindOverrides,
+  validateBindHost,
+  validateBindPort,
   isHealthCheckPath,
   buildHealthResponse,
   isReadinessPath,
@@ -33,6 +35,7 @@ import Basics
 import Bytes (Bytes)
 import Bytes qualified
 import ConcurrentVar qualified
+import Control.Exception (IOException)
 import Log qualified
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as GhcBS
@@ -155,9 +158,13 @@ data WebTransport = WebTransport
     -- | Interface to bind. Set via Application.withHost.
     --
     -- * @"127.0.0.1"@ (or any literal address such as @"::1"@): that address only.
-    --   Loopback-only is recommended behind a reverse proxy.
+    --   Loopback-only suits a reverse proxy that runs in the same network
+    --   namespace (same host, same container, or a shared pod network); a proxy
+    --   in a separate namespace cannot reach this listener through its own loopback.
     -- * @"*4"@: all IPv4 interfaces (the default; what @Warp.run@ bound before).
     -- * @"*"@: all interfaces, IPv4 and IPv6. @"*6"@: all IPv6 interfaces.
+    --
+    -- Checked by 'validateBindHost' before the server starts.
     host :: Text,
     maxBodySize :: Int,
     -- | Optional JWT authentication. Set via Application.withAuth.
@@ -246,6 +253,51 @@ applyBindOverrides maybeHost maybePort transport =
     { host = maybeHost |> Maybe.withDefault transport.host
     , port = maybePort |> Maybe.withDefault transport.port
     }
+
+
+-- | Check a bind host before the server starts. Accepted forms are the Warp
+-- wildcards (@"*"@, @"*4"@, @"*6"@) and a bare literal address or hostname
+-- such as @"127.0.0.1"@, @"::1"@ or @"localhost"@.
+--
+-- The checks target the mistakes a hand-written or LLM-written config makes:
+-- an empty or blank host, a URL (@"http://127.0.0.1"@), a path, or a
+-- @host:port@ pair pasted into the host field. A single colon can only be a
+-- port suffix because a literal IPv6 address always contains at least two.
+-- Anything that passes is handed to Warp as a 'Warp.HostPreference'; an
+-- address this machine does not own still fails at bind time with the
+-- @could not bind@ error from 'runTransport'.
+--
+-- Returns the reason the host is rejected, or 'Nothing' when it is usable.
+validateBindHost :: Text -> Maybe Text
+validateBindHost hostText = do
+  let colonCount = hostText |> Text.indexes ":" |> Array.length
+  let wordCount = hostText |> Text.words |> Array.length
+  if Text.isEmpty (Text.trim hostText)
+    then Just "bind host must not be empty; use \"*4\" for all IPv4 interfaces or \"127.0.0.1\" for loopback only"
+    else
+      if wordCount != 1
+        then Just [fmt|bind host "#{hostText}" must not contain whitespace|]
+        else
+          if Text.contains "/" hostText
+            then Just [fmt|bind host "#{hostText}" looks like a URL or path; use a bare address such as "127.0.0.1", not "http://127.0.0.1"|]
+            else
+              if colonCount == 1
+                then Just [fmt|bind host "#{hostText}" carries a port; set the port with Application.withPort instead|]
+                else Nothing
+
+
+-- | Check a bind port before the server starts. Only 1..65535 is accepted.
+-- Port 0 is rejected on purpose: the OS would pick a free port, but nothing in
+-- the application reports which one, so the server would be unreachable by
+-- design. Returns the reason the port is rejected, or 'Nothing' when usable.
+validateBindPort :: Int -> Maybe Text
+validateBindPort portNumber =
+  if portNumber == 0
+    then Just "bind port 0 asks the OS for a random port that nothing reports back; choose a fixed port between 1 and 65535"
+    else
+      if portNumber < 0 || portNumber > 65535
+        then Just [fmt|bind port #{portNumber} is outside 1..65535|]
+        else Nothing
 
 
 -- | Read request body with a size limit to prevent DoS attacks.
@@ -1089,13 +1141,17 @@ instance Transport WebTransport where
           Maybe.Nothing -> baseApp
           Maybe.Just cors -> corsMiddleware cors baseApp
 
-    -- Start the Warp server on the configured host and port
+    -- Start the Warp server on the configured host and port. A bind that the
+    -- OS refuses (port in use, address not owned by this machine) surfaces as
+    -- a Task error naming the host and port instead of an uncaught IOException.
     let host = transport.host
     let port = transport.port
     Log.withScope [("component", "WebTransport")] do
       Log.info [fmt|Starting WebTransport server on #{host}:#{port}|]
         |> Task.ignoreError
-    Warp.runSettings (warpSettings transport) waiApp |> Task.fromIO
+    Warp.runSettings (warpSettings transport) waiApp
+      |> Task.fromFailableIO @IOException
+      |> Task.mapError (\ioError -> [fmt|WebTransport could not bind #{host}:#{port}: #{show ioError}|])
 
 
   buildHandler ::

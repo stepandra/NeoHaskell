@@ -145,6 +145,14 @@ runWebTransport transportVal commandEndpoints commandSchemas queryEndpoints quer
             , readinessProbe = Just (Subscriber.readinessOf subscriber)
             }
             |> Web.applyBindOverrides maybeHost maybePort
+      -- Reject an unusable host or port here, before any socket is opened:
+      -- the error names the setting and reaches Application.run's caller.
+      case Web.validateBindHost webTransportWithConfig.host of
+        Just reason -> Task.throw [fmt|Application.withHost: #{reason}|]
+        Nothing -> pass
+      case Web.validateBindPort webTransportWithConfig.port of
+        Just reason -> Task.throw [fmt|Application.withPort: #{reason}|]
+        Nothing -> pass
       -- Build endpoints with the configured transport
       let endpoints :: Endpoints WebTransport =
             Endpoints

@@ -217,6 +217,42 @@
       "boundary": "http:real",
       "expected_examples": 1,
       "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
+      "path": "core/test/Service/Transport/Web/BindSpec.hs",
+      "match": "a wildcard bind occupies the port on every address (negative control for the loopback probe)",
+      "boundary": "http:real",
+      "expected_examples": 1,
+      "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
+      "path": "core/test/Service/Transport/Web/BindSpec.hs",
+      "match": "an invalid host fails before any socket is opened",
+      "boundary": "http:real",
+      "expected_examples": 1,
+      "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
+      "path": "core/test/Service/Transport/Web/BindSpec.hs",
+      "match": "an invalid port fails before any socket is opened",
+      "boundary": "http:real",
+      "expected_examples": 1,
+      "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
+      "path": "core/test/Service/Transport/Web/BindSpec.hs",
+      "match": "a port already in use fails with an error naming the host and port",
+      "boundary": "http:real",
+      "expected_examples": 1,
+      "fixture": "Network.Wai.Handler.Warp (loopback, free port)"
     }
   ]
 }
