@@ -30,7 +30,13 @@ existing request options (headers, timeout, `maxRedirects = 0` default, proxy
 disabled, `maxResponseBytes` limit) and the pinned TLS 1.2+ manager.
 
 ```diff signatures
-+ Http.Client: data Method = Get | Head | Post | Put | Patch | Delete
++ Http.Client: data Method
++ Http.Client: Get :: Method
++ Http.Client: Head :: Method
++ Http.Client: Post :: Method
++ Http.Client: Put :: Method
++ Http.Client: Patch :: Method
++ Http.Client: Delete :: Method
 + Http.Client: methodName :: Method -> Text
 + Http.Client: sendSecure :: Method -> Request -> Bytes -> Task Error (Response Bytes)
 + Http.Client.Internal: sendRaw :: Method -> Request -> Bytes -> Task Error (Response Bytes)
