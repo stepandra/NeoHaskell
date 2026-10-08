@@ -167,6 +167,15 @@
     {
       "kind": "hspec",
       "suite": "nhcore-test-service",
+      "path": "core/test/Service/FileUpload/ContentDedupSpec.hs",
+      "match": "duplicate upload of a present blob makes no store call",
+      "boundary": "filesystem:real",
+      "expected_examples": 1,
+      "fixture": "Service.FileUpload.ContentDedup"
+    },
+    {
+      "kind": "hspec",
+      "suite": "nhcore-test-service",
       "path": "core/test-service/Service/QueryObjectStore/PostgresSpec.hs",
       "match": "state round-trips under the threaded query name",
       "boundary": "postgres:real",

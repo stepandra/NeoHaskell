@@ -39,7 +39,10 @@ Internal-only fix inside the non-exported helper `ensureBlobPresent` in
 | `Err e` | `Log.warn`, treat as missing, re-`store` | `Log.critical` with the real error, **no store call**, request fails with the generic message `"Failed to verify stored file content. Please retry."` (same S8 convention as the existing re-store failure path: detail in the server log only) |
 
 The 23505 concurrent-race retry branches in `normalUploadFlow` are untouched;
-they call the same helper and inherit the new rule.
+they call the same helper and inherit the new rule. That path still writes
+(and then best-effort deletes) its own provisional blob before the retry
+lookup reaches the helper; the guarantee here is only that the deduplicated
+existing blob is never rewritten on unknown presence.
 
 ## Criteria
 
@@ -55,9 +58,9 @@ match in `docs/changes/test-surfaces.json` are updated to the new test name so
 
 | ID | Behavior | Proving test | Level | Boundary |
 |----|----------|--------------|-------|----------|
-| C1 | When `exists` errors, the upload fails with a generic message that does not leak the backend error, `store` is never called, and the original blob is untouched | `hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#dedup fails closed when the existence check errors` | integration | filesystem:real |
+| C1 | When `exists` errors, the upload fails with exactly the generic message `"Failed to verify stored file content. Please retry."` (no backend error leaked), `store` is never called, and the original blob is untouched | `hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#dedup fails closed when the existence check errors` | integration | filesystem:real |
 | C2 | Confirmed-missing blobs still self-heal (Pending and Confirmed matches) | `hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#dedup self-heals a missing Pending blob on re-upload`<br>`hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#dedup self-heals a missing Confirmed blob on re-upload` | integration | filesystem:real |
-| C3 | Healthy path preserved: a present blob returns the existing `FileRef`/`blobKey` without a store call | `hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#duplicate upload returns same blobKey as original` | integration | filesystem:real |
+| C3 | Healthy path preserved: a present blob returns the existing `FileRef`/`blobKey` without a store call | `hspec:nhcore-test-service:core/test/Service/FileUpload/ContentDedupSpec.hs#duplicate upload of a present blob makes no store call` | integration | filesystem:real |
 
 ## User impact
 

@@ -420,18 +420,17 @@ normalUploadFlow config blobStore stateStore ownerHash filename contentType cont
 -- | Guard a deduplication match against blob loss (issue #713).
 --
 -- Before returning an existing 'FileRef', verify its blob is still present in
--- the 'BlobStore'; if it is missing — or its presence cannot be confirmed (the
--- existence check itself errored) — re-store the caller's content under the
--- SAME blob key so the returned reference is never dangling. Healing in place
--- (same key, no state-store write) preserves dedup identity and is robust on
--- every backend: unlike falling through to a fresh upload, it cannot collide
--- with the (owner, content_hash) unique constraint and re-return the stale ref.
+-- the 'BlobStore'; only when the store confirms it is missing, re-store the
+-- caller's content under the SAME blob key so the returned reference is never
+-- dangling. Healing in place (same key, no state-store write) preserves dedup
+-- identity and is robust on every backend: unlike falling through to a fresh
+-- upload, it cannot collide with the (owner, content_hash) unique constraint
+-- and re-return the stale ref.
 --
 -- The re-stored bytes are the caller's own content, matched to the existing
 -- entry by the same owner-scoped content hash, so healing never crosses owners
--- or writes different content. 'BlobStore.store' overwrites idempotently, so a
--- redundant re-store (e.g. after a transient existence-check error) is harmless.
--- | Re-store the deduplicated blob only when the store confirms it is absent.
+-- or writes different content.
+--
 -- An errored existence check leaves presence unknown: rewriting then would
 -- overwrite a blob we cannot see (and, on S3, pay for the transfer), so the
 -- request fails instead. The real error stays in the server log; the client

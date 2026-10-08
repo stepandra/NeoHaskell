@@ -229,6 +229,24 @@ spec = do
             response2 <- uploadFile env "owner1" "file.txt" "text/plain" content
             response2.blobKey |> shouldBe response1.blobKey
 
+        it "duplicate upload of a present blob makes no store call" \_ -> do
+          withTestDedupEnv \env -> do
+            let content = "duplicate no-store content" |> Text.toBytes
+            response1 <- uploadFile env "owner1" "file.txt" "text/plain" content
+            storeCalls <- ConcurrentVar.containing (0 :: Int)
+            let observedBlobStore =
+                  (env.blobStore)
+                    { store = \key bytes -> do
+                        ConcurrentVar.modify (\n -> n + 1) storeCalls
+                        env.blobStore.store key bytes
+                    }
+            response2 <-
+              handleUploadImpl env.config observedBlobStore env.stateStore "owner1" "file.txt" "text/plain" content
+            response2.fileRef |> shouldBe response1.fileRef
+            response2.blobKey |> shouldBe response1.blobKey
+            writes <- ConcurrentVar.peek storeCalls
+            writes |> shouldBe 0
+
         it "duplicate upload returns original metadata (filename from first upload)" \_ -> do
           withTestDedupEnv \env -> do
             let content = "duplicate filename content" |> Text.toBytes
@@ -339,10 +357,12 @@ spec = do
       -- Blob Loss Self-Heal (issue #713)
       --
       -- Dedup must never return a FileRef whose blob has been lost. Before
-      -- returning a match, the blob's presence is verified; if it is missing
-      -- (or its presence cannot be confirmed), the content is re-stored under
-      -- the SAME blob key so the reference is healed in place — no new FileRef,
-      -- no state mutation, robust for both in-memory and Postgres backends.
+      -- returning a match, the blob's presence is verified; only if the store
+      -- confirms it is missing is the content re-stored under the SAME blob key
+      -- so the reference is healed in place — no new FileRef, no state
+      -- mutation, robust for both in-memory and Postgres backends. When the
+      -- existence check itself errors, presence is unknown: the upload fails
+      -- closed and nothing is re-stored.
       -- ==========================================================================
       describe "Blob Loss Self-Heal (issue #713)" do
         it "dedup self-heals a missing Pending blob on re-upload" \_ -> do
@@ -406,7 +426,7 @@ spec = do
             case result of
               Ok _ -> fail "expected the upload to fail when blob presence is unknown"
               Err msg -> do
-                (Text.contains "verify" msg) |> shouldBe True
+                msg |> shouldBe "Failed to verify stored file content. Please retry."
                 (Text.contains "injected" msg) |> shouldBe False
             rewrites <- ConcurrentVar.peek storeCalls
             rewrites |> shouldBe 0
