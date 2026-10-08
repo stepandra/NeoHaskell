@@ -260,7 +260,8 @@ applyBindOverrides maybeHost maybePort transport =
 -- such as @"127.0.0.1"@, @"::1"@ or @"localhost"@.
 --
 -- The checks target the mistakes a hand-written or LLM-written config makes:
--- an empty or blank host, a URL (@"http://127.0.0.1"@), a path, or a
+-- an empty or blank host, whitespace anywhere (including a leading or
+-- trailing space, tab or newline), a URL (@"http://127.0.0.1"@), a path, or a
 -- @host:port@ pair pasted into the host field. A single colon can only be a
 -- port suffix because a literal IPv6 address always contains at least two.
 -- Anything that passes is handed to Warp as a 'Warp.HostPreference'; an
@@ -271,11 +272,11 @@ applyBindOverrides maybeHost maybePort transport =
 validateBindHost :: Text -> Maybe Text
 validateBindHost hostText = do
   let colonCount = hostText |> Text.indexes ":" |> Array.length
-  let wordCount = hostText |> Text.words |> Array.length
+  let containsWhitespace = Text.words hostText != Array.wrap hostText
   if Text.isEmpty (Text.trim hostText)
     then Just "bind host must not be empty; use \"*4\" for all IPv4 interfaces or \"127.0.0.1\" for loopback only"
     else
-      if wordCount != 1
+      if containsWhitespace
         then Just [fmt|bind host "#{hostText}" must not contain whitespace|]
         else
           if Text.contains "/" hostText

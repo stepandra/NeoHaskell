@@ -112,6 +112,18 @@ spec = do
       it "rejects a host with whitespace inside" \_ -> do
         validateBindHost "127.0.0.1 8080" |> shouldSatisfy (\reason -> reason != Nothing)
 
+      it "rejects a host with leading or trailing spaces" \_ -> do
+        validateBindHost "127.0.0.1" |> shouldBe Nothing
+        let padded = [" 127.0.0.1", "127.0.0.1 ", " 127.0.0.1 "]
+        let accepted = padded |> Array.takeIf (\candidate -> isWhitespaceRejection candidate |> not)
+        accepted |> shouldBe []
+
+      it "rejects a host surrounded by tabs or newlines" \_ -> do
+        validateBindHost "localhost" |> shouldBe Nothing
+        let padded = ["\tlocalhost", "localhost\n", "\r\nlocalhost\t"]
+        let accepted = padded |> Array.takeIf (\candidate -> isWhitespaceRejection candidate |> not)
+        accepted |> shouldBe []
+
     describe "validateBindPort" do
       it "accepts the full 1..65535 range" \_ -> do
         validateBindPort 1 |> shouldBe Nothing
@@ -211,6 +223,14 @@ spec = do
                 Ok _ -> fail "runWith started on a port that was already in use"
                 Err err -> err |> shouldSatisfy (Text.contains [fmt|could not bind 127.0.0.1:#{occupiedPort}|])
         attempt |> Task.finally (GhcSocket.close occupied |> Task.fromIO)
+
+
+-- | Does 'validateBindHost' reject this host because of whitespace?
+isWhitespaceRejection :: Text -> Bool
+isWhitespaceRejection candidate =
+  validateBindHost candidate
+    |> Maybe.withDefault ""
+    |> Text.contains "whitespace"
 
 
 -- | A transport with a custom host and port, for the single-setting cases.
