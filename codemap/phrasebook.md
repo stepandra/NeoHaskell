@@ -89,6 +89,16 @@ Array [0]
 []
 ```
 
+```haskell
+>>> "aGVsbG8=" |> Text.toBytes |> Bytes.fromBase64 |> Result.map Text.fromBytes
+Ok "hello"
+```
+
+```haskell
+>>> "aGVsbG8" |> Text.toBytes |> Bytes.fromBase64 |> Result.isErr
+True
+```
+
 ### Float
 
 ```haskell
@@ -260,4 +270,4 @@ True
 
 ---
 
-*35 example sessions · modules with ZERO doctests: 315 (the documentation backlog — see codemap/.doc-ratchet)*
+*37 example sessions · modules with ZERO doctests: 315 (the documentation backlog — see codemap/.doc-ratchet)*

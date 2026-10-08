@@ -2,10 +2,16 @@ module Integration.Video.ExtractAudioSpec (spec) where
 
 import Array (Array)
 import Array qualified
+import AsyncTask qualified
 import Auth.SecretStore.InMemory qualified as InMemorySecretStore
 import Basics
+import Bytes (Bytes)
+import Bytes qualified
 import ConcurrentMap (ConcurrentMap)
 import ConcurrentMap qualified
+import ConcurrentVar (ConcurrentVar)
+import ConcurrentVar qualified
+import DateTime qualified
 import File qualified
 import Integration (ActionContext (..), CommandPayload (..))
 import Integration (FileAccessContext (..))
@@ -20,14 +26,22 @@ import Maybe (Maybe (..))
 import Path qualified
 import Result (Result (..))
 import Service.Command.Core (NameOf)
+import Service.Event (Event (..), StreamPosition (..))
+import Service.Event.EntityName (EntityName (..))
+import Service.Event.EventMetadata (EventMetadata (..))
+import Service.Event.StreamId qualified as StreamId
+import Service.EventStore.InMemory qualified as InMemory
 import Service.FileUpload.Core (FileAccessError (..), FileRef (..))
 import Service.Integration.DispatchRegistry qualified as DispatchRegistry
+import Service.Integration.Dispatcher qualified as Dispatcher
+import Service.Transport (EndpointHandler)
 import Subprocess qualified
 import Task (Task)
 import Task qualified
 import Test.Hspec
 import Text (Text)
 import Text qualified
+import Uuid qualified
 import Var (Var)
 import Var qualified
 
@@ -75,8 +89,8 @@ spec = do
         Ok (Just payload) -> do
           let encoded = Json.encodeText payload.commandData
           Text.contains "AudioExtracted" encoded `shouldBe` True
-          Text.contains fakeWavText encoded `shouldBe` True
           Text.contains "audio/wav" encoded `shouldBe` True
+          decodedAudio payload `shouldBe` Ok fakeWavBytes
         _ ->
           expectationFailure "expected the onSuccess command"
       Array.length calls `shouldBe` 1
@@ -86,6 +100,13 @@ spec = do
       (_, calls) <- Task.runOrPanic (runScenario succeedingFfmpeg VideoAudio.defaultConfig)
       let inputPresent = calls |> Array.map (\call -> call.callInputPresent)
       inputPresent `shouldBe` Array.wrap True
+      let inputBytes = calls |> Array.map (\call -> call.callInputBytes)
+      inputBytes `shouldBe` Array.wrap (Just fakeVideoBytes)
+
+    it "round-trips binary WAV bytes through the Base64 command field" do
+      let encodedAudio = fakeWavBytes |> Bytes.toBase64 |> Text.fromBytes
+      decodeAudio encodedAudio `shouldBe` Ok fakeWavBytes
+      Bytes.length fakeWavBytes `shouldBe` 268
 
     it "passes -vn -ac 1 -ar 16000 -fs 25000000 and the default 180 s timeout" do
       (_, calls) <- Task.runOrPanic (runScenario succeedingFfmpeg VideoAudio.defaultConfig)
@@ -153,11 +174,52 @@ spec = do
       Array.length calls `shouldBe` 0
 
 
+  describe "Integration.Video.ExtractAudio dispatcher timeout interaction" do
+    it "delivers onSuccess past a short deadline when the dispatcher timeout is raised above the extraction" do
+      let slowExtraction = succeedingFfmpeg {ffmpegDelayMs = slowExtractionMs}
+      (commands, calls) <- Task.runOrPanic (runThroughDispatcher slowExtraction (Just raisedDispatcherTimeoutMs))
+      case commands |> Array.get 0 of
+        Just (AudioExtracted {audioBase64, mime}) -> do
+          decodeAudio audioBase64 `shouldBe` Ok fakeWavBytes
+          mime `shouldBe` "audio/wav"
+        _ ->
+          expectationFailure [fmt|expected the onSuccess command, got #{commands}|]
+      Array.length commands `shouldBe` 1
+      Array.length calls `shouldBe` 1
+
+    it "cancels the extraction before onSuccess when the dispatcher timeout is shorter" do
+      let slowExtraction = succeedingFfmpeg {ffmpegDelayMs = slowExtractionMs}
+      (commands, calls) <- Task.runOrPanic (runThroughDispatcher slowExtraction (Just shortDispatcherTimeoutMs))
+      commands `shouldBe` Array.empty
+      Array.length calls `shouldBe` 1
+
+    it "reaches onError with the extraction timeout when the dispatcher timeout is longer" do
+      let timingOut = succeedingFfmpeg {ffmpegDelayMs = slowExtractionMs, ffmpegTimesOut = True}
+      (commands, calls) <- Task.runOrPanic (runThroughDispatcher timingOut (Just raisedDispatcherTimeoutMs))
+      case commands |> Array.get 0 of
+        Just (ExtractionFailed {reason}) ->
+          Text.contains "timed out" reason `shouldBe` True
+        _ ->
+          expectationFailure [fmt|expected the onError command, got #{commands}|]
+      Array.length commands `shouldBe` 1
+      Array.length calls `shouldBe` 1
+
+    it "never reaches onError when the dispatcher timeout expires before the extraction timeout" do
+      let timingOut = succeedingFfmpeg {ffmpegDelayMs = slowExtractionMs, ffmpegTimesOut = True}
+      (commands, calls) <- Task.runOrPanic (runThroughDispatcher timingOut (Just shortDispatcherTimeoutMs))
+      commands `shouldBe` Array.empty
+      Array.length calls `shouldBe` 1
+
+
 -- | How the fake ffmpeg behaves.
 data Scenario = Scenario
   { ffmpegInstalled :: Bool
   , ffmpegExitCode :: Int
   , ffmpegStderr :: Text
+  , ffmpegDelayMs :: Int
+  -- ^ Wall-clock time the fake run takes, standing in for a slow video
+  , ffmpegTimesOut :: Bool
+  -- ^ After the delay, fail as 'Subprocess.runWithTimeout' does when ffmpeg hits 'timeoutSeconds'
   }
 
 
@@ -167,28 +229,50 @@ data Call = Call
   , callExecutable :: Text
   , callArguments :: Array Text
   , callInputPresent :: Bool
+  , callInputBytes :: Maybe Bytes
   }
   deriving (Eq, Show)
 
 
 missingFfmpeg :: Scenario
-missingFfmpeg = Scenario {ffmpegInstalled = False, ffmpegExitCode = 0, ffmpegStderr = ""}
+missingFfmpeg = succeedingFfmpeg {ffmpegInstalled = False}
 
 
 failingFfmpeg :: Text -> Scenario
-failingFfmpeg stderrText = Scenario {ffmpegInstalled = True, ffmpegExitCode = 1, ffmpegStderr = stderrText}
+failingFfmpeg stderrText = succeedingFfmpeg {ffmpegExitCode = 1, ffmpegStderr = stderrText}
 
 
 succeedingFfmpeg :: Scenario
-succeedingFfmpeg = Scenario {ffmpegInstalled = True, ffmpegExitCode = 0, ffmpegStderr = ""}
+succeedingFfmpeg = Scenario
+  { ffmpegInstalled = True
+  , ffmpegExitCode = 0
+  , ffmpegStderr = ""
+  , ffmpegDelayMs = 0
+  , ffmpegTimesOut = False
+  }
 
 
-fakeWavText :: Text
-fakeWavText = "RIFF-fake-wav"
+-- | An MP4-style header followed by every byte value, so the fixture holds
+-- NUL bytes and bytes that are not valid UTF-8.
+fakeVideoBytes :: Bytes
+fakeVideoBytes =
+  Bytes.append
+    (Bytes.pack [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D])
+    (Bytes.pack [0 .. 255])
 
 
--- | A runner that never starts a process. On exit code 0 it writes
--- 'fakeWavText' to the output path it was given, like ffmpeg would.
+-- | A RIFF/WAVE header followed by every byte value in descending order, so
+-- the audio cannot survive a UTF-8 text round trip.
+fakeWavBytes :: Bytes
+fakeWavBytes =
+  Bytes.append
+    (Bytes.pack [0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45])
+    (Bytes.pack [255, 254 .. 0])
+
+
+-- | A runner that never starts a process. It records the bytes of the input
+-- file it was given; after 'ffmpegDelayMs' it either fails with a timeout or,
+-- on exit code 0, writes 'fakeWavBytes' to the output path, like ffmpeg would.
 fakeRunner :: Var (Array Call) -> Scenario -> Runner
 fakeRunner callsVar scenario = Runner
   { which = \name ->
@@ -203,19 +287,24 @@ fakeRunner callsVar scenario = Runner
         Just inputPath ->
           File.exists inputPath
             |> Task.mapError (\_ -> Subprocess.ProcessError "fake exists check failed")
+      inputBytes <- readInputBytes arguments
       let call = Call
             { callTimeout = timeout
             , callExecutable = executable
             , callArguments = arguments
             , callInputPresent = inputPresent
+            , callInputBytes = inputBytes
             }
       recorded <- Var.get callsVar
       Var.set (Array.push call recorded) callsVar
+      AsyncTask.sleep scenario.ffmpegDelayMs
+      Task.when scenario.ffmpegTimesOut do
+        Task.throw (Subprocess.TimeoutError [fmt|ffmpeg exceeded #{timeout} seconds|])
       Task.when (scenario.ffmpegExitCode == 0) do
         case Array.last arguments |> andThenPath of
           Nothing -> Task.throw (Subprocess.ProcessError "fake runner: no output path")
           Just outputPath ->
-            File.writeBytes outputPath (Text.toBytes fakeWavText)
+            File.writeBytes outputPath fakeWavBytes
               |> Task.mapError (\_ -> Subprocess.ProcessError "fake runner: write failed")
       Task.yield Subprocess.Completion
         { exitCode = scenario.ffmpegExitCode
@@ -223,6 +312,16 @@ fakeRunner callsVar scenario = Runner
         , stderr = scenario.ffmpegStderr
         }
   }
+
+
+-- | The bytes ffmpeg would read from its @-i@ input file; Nothing when unreadable.
+readInputBytes :: Array Text -> Task Subprocess.Error (Maybe Bytes)
+readInputBytes arguments = case Array.get 4 arguments |> andThenPath of
+  Nothing -> Task.yield Nothing
+  Just inputPath ->
+    File.readBytes inputPath
+      |> Task.map Just
+      |> Task.recover (\_ -> Task.yield Nothing)
 
 
 andThenPath :: Maybe Text -> Maybe Path.Path
@@ -274,14 +373,18 @@ runScenario ::
 runScenario scenario config = do
   callsVar <- Var.new Array.empty
   let runner = fakeRunner callsVar scenario
-  let videoAccess = FileAccessContext
-        { retrieveFile = \_ -> Task.yield (Text.toBytes "fake video bytes")
-        , getFileMetadata = \_ -> Task.throw (StorageError "metadata not available")
-        }
   ctx <- makeContext (Just videoAccess)
   outcome <- executeExtraction runner ctx (makeRequest config) |> Task.asResult
   calls <- Var.get callsVar
   Task.yield (outcome, calls)
+
+
+-- | Uploads that always hand back 'fakeVideoBytes'.
+videoAccess :: FileAccessContext
+videoAccess = FileAccessContext
+  { retrieveFile = \_ -> Task.yield fakeVideoBytes
+  , getFileMetadata = \_ -> Task.throw (StorageError "metadata not available")
+  }
 
 
 makeRequest :: Config -> Request TestCommand
@@ -289,21 +392,148 @@ makeRequest config = Request
   { fileRef = FileRef "00000000-0000-0000-0000-000000000001"
   , config = config
   , onSuccess = \result -> AudioExtracted
-      { audioText = Text.fromBytes result.audio
+      { audioBase64 = result.audio |> Bytes.toBase64 |> Text.fromBytes
       , mime = result.mimeType
       }
   , onError = \reason -> ExtractionFailed {reason}
   }
 
 
+-- | The decoding step the module documentation tells Jess to use.
+decodeAudio :: Text -> Result Text Bytes
+decodeAudio audioBase64 =
+  audioBase64
+    |> Text.toBytes
+    |> Bytes.fromBase64
+
+
+-- | The audio carried by an emitted onSuccess command, decoded from JSON and Base64.
+decodedAudio :: CommandPayload -> Result Text Bytes
+decodedAudio payload =
+  case Json.decode payload.commandData of
+    Ok (AudioExtracted {audioBase64}) -> decodeAudio audioBase64
+    Ok other -> Err [fmt|expected AudioExtracted, got #{other}|]
+    Err decodeError -> Err decodeError
+
+
+-- | Longer than 'shortDispatcherTimeoutMs', far shorter than 'raisedDispatcherTimeoutMs'.
+slowExtractionMs :: Int
+slowExtractionMs = 400
+
+
+shortDispatcherTimeoutMs :: Int
+shortDispatcherTimeoutMs = 150
+
+
+raisedDispatcherTimeoutMs :: Int
+raisedDispatcherTimeoutMs = 3000
+
+
+-- | Longest wait for the dispatcher to deliver a command. A command that has
+-- not arrived by then was cancelled; the extraction itself ends long before.
+commandWaitMs :: Int
+commandWaitMs = 1500
+
+
+-- | Run one extraction the way an application does: a dispatcher worker
+-- processes a video event under the given 'eventProcessingTimeoutMs' and
+-- sends the emitted command to its endpoint. Returns the commands received
+-- and the ffmpeg runs that started.
+runThroughDispatcher :: Scenario -> Maybe Int -> Task Text (Array TestCommand, Array Call)
+runThroughDispatcher scenario dispatcherTimeoutMs = do
+  callsVar <- Var.new Array.empty
+  received <- ConcurrentVar.containing Array.empty
+  context <- makeContext (Just videoAccess)
+  eventStore <- InMemory.new |> Task.mapError (\err -> [fmt|#{err}|])
+  dispatcher <-
+    Dispatcher.newWithLifecycleConfig
+      (dispatcherConfig dispatcherTimeoutMs)
+      eventStore
+      (Array.wrap (extractionOutboundRunner (fakeRunner callsVar scenario)))
+      Array.empty
+      (Map.empty |> Map.set "TestCommand" (recordingEndpoint received))
+      context
+  event <- videoUploadedEvent
+  Dispatcher.dispatch dispatcher event
+  waitForCommand received commandWaitMs
+  Dispatcher.shutdown dispatcher
+  commands <- ConcurrentVar.peek received
+  calls <- Var.get callsVar
+  Task.yield (commands, calls)
+
+
+-- | Dispatcher settings for a deterministic test: no reaper, no retries.
+dispatcherConfig :: Maybe Int -> Dispatcher.DispatcherConfig
+dispatcherConfig eventProcessingTimeoutMs =
+  Dispatcher.defaultConfig
+    { Dispatcher.enableReaper = False
+    , Dispatcher.eventProcessingTimeoutMs = eventProcessingTimeoutMs
+    , Dispatcher.maxEventRetries = 0
+    }
+
+
+-- | The outbound runner an application derives for 'Request', with the fake process boundary.
+extractionOutboundRunner :: Runner -> Dispatcher.OutboundRunner
+extractionOutboundRunner runner = Dispatcher.OutboundRunner
+  { entityTypeName = "Lecture"
+  , processEvent = \ctx _eventStore _event -> do
+      emitted <- executeExtraction runner ctx (makeRequest VideoAudio.defaultConfig)
+        |> Task.mapError (\err -> [fmt|#{err}|])
+      case emitted of
+        Just payload -> Task.yield (Array.wrap payload)
+        Nothing -> Task.yield Array.empty
+  }
+
+
+-- | A command endpoint that decodes and keeps every command it receives.
+recordingEndpoint :: ConcurrentVar (Array TestCommand) -> EndpointHandler
+recordingEndpoint received _requestContext commandBytes _respond =
+  case Json.decodeBytes commandBytes of
+    Ok command -> received |> ConcurrentVar.modify (Array.push command)
+    Err decodeError -> Task.throw [fmt|undecodable command: #{decodeError}|]
+
+
+-- | Poll until a command arrives or the wait runs out.
+waitForCommand :: ConcurrentVar (Array TestCommand) -> Int -> Task Text Unit
+waitForCommand received remainingMs = do
+  commands <- ConcurrentVar.peek received
+  if Array.length commands > 0 || remainingMs <= 0
+    then Task.yield unit
+    else do
+      AsyncTask.sleep 25
+      waitForCommand received (remainingMs - 25)
+
+
+videoUploadedEvent :: Task Text (Event Json.Value)
+videoUploadedEvent = do
+  now <- DateTime.now
+  Task.yield Event
+    { entityName = EntityName "Lecture"
+    , streamId = StreamId.fromTextUnsafe "lecture-1"
+    , event = Json.encode ("VideoUploaded" :: Text)
+    , metadata = EventMetadata
+        { eventId = Uuid.nil
+        , relatedUserSub = Nothing
+        , correlationId = Nothing
+        , causationId = Nothing
+        , createdAt = now
+        , localPosition = Just (StreamPosition 1)
+        , globalPosition = Just (StreamPosition 1)
+        }
+    }
+
+
 -- | Minimal command type satisfying the ToAction constraints.
 data TestCommand
-  = AudioExtracted {audioText :: Text, mime :: Text}
+  = AudioExtracted {audioBase64 :: Text, mime :: Text}
   | ExtractionFailed {reason :: Text}
   deriving (Eq, Show, Generic)
 
 
 instance Json.ToJSON TestCommand
+
+
+instance Json.FromJSON TestCommand
 
 
 type instance NameOf TestCommand = "TestCommand"

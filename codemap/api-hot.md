@@ -45,7 +45,7 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 
 ## Text
 
-- `fromLinkedList :: LinkedList Char -> Text`  <!-- 90 call sites -->
+- `fromLinkedList :: LinkedList Char -> Text`  <!-- 91 call sites -->
 - `toLinkedList :: Text -> LinkedList Char`  <!-- 78 call sites -->
 - `toBytes :: Text -> Bytes`  <!-- 66 call sites -->
 - `replace :: Text -> Text -> Text -> Text`  <!-- 33 call sites -->
@@ -283,7 +283,7 @@ codemap/signatures/ · type-directed search: ./dev api "<type>"
 - `fmap :: Functor f => (a -> b) -> f a -> f b`  <!-- 17 call sites -->
 - `map :: Mappable mappable => (typeA -> typeB) -> mappable typeA -> mappable typeB`  <!-- 16 call sites -->
 
-*cut: 103 more modules (AtomicVar (26), Integration.Http (26), Decider (21), Result (21), Lock (20), …) — full surface: codemap/signatures/*
+*cut: 103 more modules (AtomicVar (26), Integration.Http (26), Result (24), Decider (21), Lock (20), …) — full surface: codemap/signatures/*
 
 ---
 
@@ -294,30 +294,30 @@ when WRITING TESTS; they are not feature-code frequency signal.
 
 ## Task
 
-- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 826 test call sites -->
-- `yield :: value -> Task w value`  <!-- 476 test call sites -->
+- `mapError :: (err1 -> err2) -> Task err1 value -> Task err2 value`  <!-- 828 test call sites -->
+- `yield :: value -> Task w value`  <!-- 483 test call sites -->
 - `asResult :: Task err value -> Task err2 (Result err value)`  <!-- 286 test call sites -->
 - `mapArray :: (element -> Task err output) -> Array element -> Task err (Array output)`  <!-- 127 test call sites -->
-- `throw :: err -> Task err w`  <!-- 122 test call sites -->
+- `throw :: err -> Task err w`  <!-- 124 test call sites -->
 - `andThen :: (input -> Task err output) -> Task err input -> Task err output`  <!-- 92 test call sites -->
 - `fromIO :: IO value -> Task w value`  <!-- 90 test call sites -->
-- `map :: (input -> output) -> Task err input -> Task err output`  <!-- 83 test call sites -->
+- `map :: (input -> output) -> Task err input -> Task err output`  <!-- 84 test call sites -->
 
 ## Array
 
-- `length :: Array a -> Int`  <!-- 269 test call sites -->
-- `empty :: Array a`  <!-- 225 test call sites -->
+- `length :: Array a -> Int`  <!-- 276 test call sites -->
+- `empty :: Array a`  <!-- 231 test call sites -->
 - `fromLinkedList :: LinkedList a -> Array a`  <!-- 221 test call sites -->
-- `map :: (a -> b) -> Array a -> Array b`  <!-- 137 test call sites -->
-- `get :: Int -> Array a -> Maybe a`  <!-- 86 test call sites -->
-- `wrap :: a -> Array a`  <!-- 57 test call sites -->
+- `map :: (a -> b) -> Array a -> Array b`  <!-- 138 test call sites -->
+- `get :: Int -> Array a -> Maybe a`  <!-- 89 test call sites -->
+- `wrap :: a -> Array a`  <!-- 60 test call sites -->
 - `initialize :: Int -> (Int -> a) -> Array a`  <!-- 47 test call sites -->
 - `contains :: Eq value => value -> Array value -> Bool`  <!-- 41 test call sites -->
 
 ## Text
 
 - `contains :: Text -> Text -> Bool`  <!-- 450 test call sites -->
-- `toBytes :: Text -> Bytes`  <!-- 91 test call sites -->
+- `toBytes :: Text -> Bytes`  <!-- 98 test call sites -->
 - `fromLinkedList :: LinkedList Char -> Text`  <!-- 58 test call sites -->
 - `length :: Text -> Int`  <!-- 41 test call sites -->
 - `repeat :: Int -> Text -> Text`  <!-- 35 test call sites -->
@@ -343,8 +343,8 @@ when WRITING TESTS; they are not feature-code frequency signal.
 - `encodeText :: ToJSON value => value -> Text`  <!-- 120 test call sites -->
 - `object :: [(Text, Value)] -> Value`  <!-- 105 test call sites -->
 - `null :: Value`  <!-- 58 test call sites -->
-- `encode :: ToJSON value => value -> Value`  <!-- 55 test call sites -->
-- `decode :: FromJSON value => Value -> Result Text value`  <!-- 29 test call sites -->
+- `encode :: ToJSON value => value -> Value`  <!-- 56 test call sites -->
+- `decode :: FromJSON value => Value -> Result Text value`  <!-- 30 test call sites -->
 - `yield :: value -> Parser value`  <!-- 4 test call sites -->
 
 ## Layout
@@ -360,9 +360,9 @@ when WRITING TESTS; they are not feature-code frequency signal.
 
 ## ConcurrentVar
 
-- `containing :: value -> Task w (ConcurrentVar value)`  <!-- 125 test call sites -->
-- `modify :: (value -> value) -> ConcurrentVar value -> Task w Unit`  <!-- 120 test call sites -->
-- `peek :: ConcurrentVar value -> Task w value`  <!-- 102 test call sites -->
+- `containing :: value -> Task w (ConcurrentVar value)`  <!-- 126 test call sites -->
+- `modify :: (value -> value) -> ConcurrentVar value -> Task w Unit`  <!-- 121 test call sites -->
+- `peek :: ConcurrentVar value -> Task w value`  <!-- 104 test call sites -->
 - `get :: ConcurrentVar value -> Task w value`  <!-- 39 test call sites -->
 - `set :: value -> ConcurrentVar value -> Task w ()`  <!-- 15 test call sites -->
 - `new :: forall value w. Task w (ConcurrentVar value)`  <!-- 14 test call sites -->
@@ -372,9 +372,9 @@ when WRITING TESTS; they are not feature-code frequency signal.
 ## Uuid
 
 - `generate :: Task w Uuid`  <!-- 182 test call sites -->
-- `nil :: Uuid`  <!-- 107 test call sites -->
+- `nil :: Uuid`  <!-- 108 test call sites -->
 - `toText :: Uuid -> Text`  <!-- 45 test call sites -->
 - `generateV5 :: Uuid -> Text -> Uuid`  <!-- 19 test call sites -->
 - `fromText :: Text -> Maybe Uuid`  <!-- 3 test call sites -->
 
-*cut: 140 more modules (Map (258), Service.Application (250), Set (233), AsyncTask (223), Stream (212), …) — full surface: codemap/signatures/*
+*cut: 140 more modules (Map (260), Service.Application (250), Set (233), AsyncTask (225), Stream (212), …) — full surface: codemap/signatures/*
