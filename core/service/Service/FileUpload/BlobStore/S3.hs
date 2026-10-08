@@ -122,17 +122,26 @@ validateConfig config = do
       }
 
 
--- | True for a bucket name that is valid in a path-style S3 URL.
+-- | True for a bucket name that is valid in a path-style S3 URL: 3 to 63
+-- lowercase ASCII letters, digits, hyphens and dots, where every dot-separated
+-- label is non-empty and starts and ends with a letter or digit.
 --
--- >>> isDnsBucketName "my-bucket"
+-- >>> isDnsBucketName "my-bucket.v2"
 -- True
 --
 -- >>> isDnsBucketName "My_Bucket"
 -- False
+--
+-- >>> isDnsBucketName "a..b"
+-- False
 isDnsBucketName :: Text -> Bool
 isDnsBucketName name = do
   let validChar char = (Char.isLower char && Char.toCode char < 128) || Char.isDigit char || char == '-' || char == '.'
-  Text.length name >= 3 && Text.length name <= 63 && Text.all validChar name
+  let invalidLabel label = Text.isEmpty label || Text.startsWith "-" label || Text.endsWith "-" label
+  Text.length name >= 3
+    && Text.length name <= 63
+    && Text.all validChar name
+    && not (name |> Text.split "." |> Array.any invalidLabel)
 
 
 data Endpoint = Endpoint

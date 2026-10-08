@@ -120,6 +120,22 @@ spec = do
         badBucket <- createBlobStore (configWith "AKIAIOSFODNN7EXAMPLE" "Bad_Bucket") |> Task.asResult
         badBucket |> Result.map (\_ -> ()) |> shouldBe (Err "S3 bucket must be a DNS-style bucket name")
 
+      it "rejects bucket names with an empty label or a hyphen at a label edge" \_ -> do
+        let invalidNames = ["a..b", ".ab", "ab.", "-ab", "ab-", "a.-b", "a-.b"]
+        outcomes <- invalidNames |> Task.mapArray bucketOutcome
+        outcomes |> shouldBe (invalidNames |> Array.map (\name -> (name, Err "S3 bucket must be a DNS-style bucket name")))
+
+      it "accepts dotted and hyphenated bucket names" \_ -> do
+        let validNames = ["my-bucket", "a-b.c-d", "logs.2026.v2", "0a.b9"]
+        outcomes <- validNames |> Task.mapArray bucketOutcome
+        outcomes |> shouldBe (validNames |> Array.map (\name -> (name, Ok ())))
+
+      it "enforces the 3 to 63 character bucket name bounds" \_ -> do
+        outcomes <- ["abc", Text.repeat 63 "a", "ab", Text.repeat 64 "a"] |> Task.mapArray bucketOutcome
+        outcomes
+          |> Array.map (\(_, outcome) -> outcome)
+          |> shouldBe [Ok (), Ok (), Err "S3 bucket must be a DNS-style bucket name", Err "S3 bucket must be a DNS-style bucket name"]
+
       it "accepts an https endpoint without contacting it" \_ -> do
         result <- createBlobStore (validConfig "https://s3.example.com") |> Task.asResult
         result |> Result.map (\_ -> ()) |> shouldBe (Ok ())
@@ -155,6 +171,15 @@ configWith accessKeyId bucket =
     , accessKeyId
     , secretAccessKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
     }
+
+
+-- | Validation outcome of a config that differs from a valid one only in its bucket.
+bucketOutcome :: Text -> Task Text (Text, Result Text Unit)
+bucketOutcome bucket = do
+  outcome <-
+    createBlobStore (configWith (validConfig "https://s3.example.com").accessKeyId bucket)
+      |> Task.asResult
+  Task.yield (bucket, outcome |> Result.map (\_ -> ()))
 
 
 withS3BlobStore :: (FakeS3 -> BlobStore -> Task Text Unit) -> Task Text Unit
