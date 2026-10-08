@@ -31,10 +31,26 @@ steps are unit-testable against the AWS reference vectors; applications are
 expected to use only `S3Config` and `createBlobStore`.
 
 ```diff signatures
-+ Service.FileUpload.BlobStore.S3: data S3Config = S3Config {endpoint :: Text, bucket :: Text, region :: Text, accessKeyId :: Text, secretAccessKey :: Text}
++ Service.FileUpload.BlobStore.S3: data S3Config
++ Service.FileUpload.BlobStore.S3: S3Config :: Text -> Text -> Text -> Text -> Text -> S3Config
++ Service.FileUpload.BlobStore.S3: [endpoint] :: S3Config -> Text
++ Service.FileUpload.BlobStore.S3: [bucket] :: S3Config -> Text
++ Service.FileUpload.BlobStore.S3: [region] :: S3Config -> Text
++ Service.FileUpload.BlobStore.S3: [accessKeyId] :: S3Config -> Text
++ Service.FileUpload.BlobStore.S3: [secretAccessKey] :: S3Config -> Text
 + Service.FileUpload.BlobStore.S3: createBlobStore :: S3Config -> Task Text BlobStore
-+ Service.FileUpload.BlobStore.S3.SigV4: data Credentials = Credentials {accessKeyId :: Text, secretAccessKey :: Text, region :: Text}
-+ Service.FileUpload.BlobStore.S3.SigV4: data CanonicalRequest = CanonicalRequest {method :: Text, path :: Text, query :: Array (Text, Text), headers :: Array (Text, Text), payloadHash :: Text}
++ Service.FileUpload.BlobStore.S3.SigV4: data Credentials
++ Service.FileUpload.BlobStore.S3.SigV4: Credentials :: Text -> Text -> Text -> Credentials
++ Service.FileUpload.BlobStore.S3.SigV4: [accessKeyId] :: Credentials -> Text
++ Service.FileUpload.BlobStore.S3.SigV4: [secretAccessKey] :: Credentials -> Text
++ Service.FileUpload.BlobStore.S3.SigV4: [region] :: Credentials -> Text
++ Service.FileUpload.BlobStore.S3.SigV4: data CanonicalRequest
++ Service.FileUpload.BlobStore.S3.SigV4: CanonicalRequest :: Text -> Text -> Array (Text, Text) -> Array (Text, Text) -> Text -> CanonicalRequest
++ Service.FileUpload.BlobStore.S3.SigV4: [method] :: CanonicalRequest -> Text
++ Service.FileUpload.BlobStore.S3.SigV4: [path] :: CanonicalRequest -> Text
++ Service.FileUpload.BlobStore.S3.SigV4: [query] :: CanonicalRequest -> Array (Text, Text)
++ Service.FileUpload.BlobStore.S3.SigV4: [headers] :: CanonicalRequest -> Array (Text, Text)
++ Service.FileUpload.BlobStore.S3.SigV4: [payloadHash] :: CanonicalRequest -> Text
 + Service.FileUpload.BlobStore.S3.SigV4: canonicalRequest :: CanonicalRequest -> Text
 + Service.FileUpload.BlobStore.S3.SigV4: stringToSign :: Credentials -> DateTime -> CanonicalRequest -> Text
 + Service.FileUpload.BlobStore.S3.SigV4: signature :: Credentials -> DateTime -> CanonicalRequest -> Text
