@@ -190,8 +190,21 @@ jobs:
         with:
           name: dist-newstyle
           path: dist-newstyle
+      # Tee the direct per-example output: integration criteria whose locators
+      # live in nhcore-test-core are proven from this report by the criteria
+      # gate in test-service. Non-hidden filename: upload-artifact skips
+      # dotfiles by default.
       - name: Run nhcore-test-core
-        run: LOG_LEVEL=Warn nix develop --command cabal test nhcore-test-core
+        run: |
+          set -o pipefail
+          LOG_LEVEL=Warn nix develop --command cabal test nhcore-test-core \
+            --test-show-details=direct | tee nhcore-test-core.report
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nhcore-test-core-report
+          path: nhcore-test-core.report
+          retention-days: 1
+          if-no-files-found: error
 
   test-auth:
     needs: [build]
@@ -234,7 +247,8 @@ jobs:
         run: LOG_LEVEL=Warn nix develop --command cabal test nhcore-test-integration
 
   test-service:
-    needs: [build]
+    # test-core supplies its report for the criteria gate below.
+    needs: [build, test-core]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -277,12 +291,21 @@ jobs:
           set -o pipefail
           LOG_LEVEL=Warn nix develop --command cabal test nhcore-test-service \
             --test-show-details=direct | tee .nhcore-test-service.report
+      - uses: actions/download-artifact@v8
+        if: github.event_name == 'pull_request'
+        with:
+          name: nhcore-test-core-report
+      # One report across both suites: a missing core report fails `cat`
+      # (closed), never a silently service-only gate.
       - name: Prove integration criterion selectors and real fixtures
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
           POSTGRES_AVAILABLE: "true"
-        run: ./dev spec-check --criteria-runtime "origin/${BASE_REF}" --report .nhcore-test-service.report
+        run: |
+          set -euo pipefail
+          cat nhcore-test-core.report .nhcore-test-service.report > nhcore-criteria.report
+          ./dev spec-check --criteria-runtime "origin/${BASE_REF}" --report nhcore-criteria.report
 
   test-hurl:
     needs: [build]
