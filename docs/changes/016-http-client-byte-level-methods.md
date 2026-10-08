@@ -40,17 +40,24 @@ disabled, `maxResponseBytes` limit) and the pinned TLS 1.2+ manager.
 
 | ID | Behavior | Proving test | Level | Boundary |
 |----|----------|--------------|-------|----------|
-| C1 | A PUT delivers the wire method, the raw body and caller headers unchanged | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw PUT delivers method, raw body and custom header` | unit | none |
-| C2 | HEAD returns status and headers with an empty body and does not throw | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw HEAD returns headers and an empty body without throwing` | unit | none |
-| C3 | Non-2xx statuses (404, 403) are returned as `statusCode`, never as `Err` | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw DELETE surfaces a 404 as a status code, not an error`<br>`hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw PUT surfaces a 403 as a status code, not an error` | unit | none |
-| C4 | The response-size limit applies to every method | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw enforces maxResponseBytes on the response body` | unit | none |
+| C1 | A PUT delivers the wire method, the raw body and caller headers unchanged | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw PUT delivers method, raw body and custom header` | integration | http:real |
+| C2 | HEAD returns status and headers with an empty body and does not throw | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw HEAD returns headers and an empty body without throwing` | integration | http:real |
+| C3 | Non-2xx statuses (404, 403) are returned as `statusCode`, never as `Err` | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw DELETE surfaces a 404 as a status code, not an error`<br>`hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw PUT surfaces a 403 as a status code, not an error` | integration | http:real |
+| C4 | The response-size limit applies to every method | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendRaw enforces maxResponseBytes on the response body` | integration | http:real |
 | C5 | `sendSecure` rejects plain `http://` with a sanitized `InvalidUrl` | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#sendSecure rejects a plain http:// URL with InvalidUrl` | unit | none |
 | C6 | `methodName` spells every wire token of the closed `Method` set | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#methodName spells every wire token` | unit | none |
-| C7 | Existing GET behavior is unchanged (`getRaw` status/body/network-error cases) | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#returns Ok with statusCode 401 on 401 response`<br>`hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#returns Err on network error` | unit | none |
+| C7 | Existing GET behavior is unchanged: `getRaw` returns a non-2xx status as `statusCode` | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#returns Ok with statusCode 401 on 401 response` | integration | http:real |
+| C8 | Existing GET behavior is unchanged: `getRaw` reports a refused connection as `Err` | `hspec:nhcore-test-core:core/test/Http/ClientRawSpec.hs#returns Err on network error` | unit | none |
 
-The proving tests use the in-process Warp mock pattern already present in
-`core/test/Http/ClientRawSpec.hs` (loopback, free port, no external service),
-so they run in `nhcore-test-core` with boundary `none`.
+C1–C4 and C7 send real HTTP over loopback to an in-process Warp server
+started by `core/test/Http/ClientRawSpec.hs` (free port, no external
+service), so a broken wire path fails them: they are `integration` /
+`http:real`, and `docs/changes/test-surfaces.json` attests each exact selector
+with its `Http.Client.Internal.sendRaw` or `Http.Client.Internal.getRaw`
+fixture group. C5 and C6 stay `unit` / `none`: the scheme check fails before
+any connection and `methodName` is pure. C8 also stays `unit` / `none`: it
+only proves that a connection attempt to a closed loopback port becomes `Err`,
+and no fixture server ever answers it.
 
 ## User impact
 
